@@ -1,0 +1,12 @@
+//
+//  SecureFetchData.swift
+//  Stepmates Auth
+//
+//  Created by Диана on 27/01/2026.
+//
+
+import Foundation
+
+struct SecureFetchData: Codable {
+    let message: String
+}
