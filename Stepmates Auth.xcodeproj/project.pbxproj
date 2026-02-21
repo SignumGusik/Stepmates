@@ -1,0 +1,568 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		D4D3B58E2F4A25E600233376 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D4D3B56F2F4A25E400233376 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D4D3B5762F4A25E400233376;
+			remoteInfo = "Stepmates Auth";
+		};
+		D4D3B5982F4A25E600233376 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D4D3B56F2F4A25E400233376 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D4D3B5762F4A25E400233376;
+			remoteInfo = "Stepmates Auth";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		D4D3B5772F4A25E400233376 /* Stepmates Auth.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Stepmates Auth.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4D3B58D2F4A25E600233376 /* Stepmates AuthTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Stepmates AuthTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4D3B5972F4A25E600233376 /* Stepmates AuthUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Stepmates AuthUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D4D3B59F2F4A25E600233376 /* Exceptions for "Stepmates Auth" folder in "Stepmates Auth" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D4D3B5762F4A25E400233376 /* Stepmates Auth */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D4D3B5792F4A25E400233376 /* Stepmates Auth */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D4D3B59F2F4A25E600233376 /* Exceptions for "Stepmates Auth" folder in "Stepmates Auth" target */,
+			);
+			path = "Stepmates Auth";
+			sourceTree = "<group>";
+		};
+		D4D3B5902F4A25E600233376 /* Stepmates AuthTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Stepmates AuthTests";
+			sourceTree = "<group>";
+		};
+		D4D3B59A2F4A25E600233376 /* Stepmates AuthUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Stepmates AuthUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D4D3B5742F4A25E400233376 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4D3B58A2F4A25E600233376 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4D3B5942F4A25E600233376 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D4D3B56E2F4A25E400233376 = {
+			isa = PBXGroup;
+			children = (
+				D4D3B5792F4A25E400233376 /* Stepmates Auth */,
+				D4D3B5902F4A25E600233376 /* Stepmates AuthTests */,
+				D4D3B59A2F4A25E600233376 /* Stepmates AuthUITests */,
+				D4D3B5782F4A25E400233376 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D4D3B5782F4A25E400233376 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D4D3B5772F4A25E400233376 /* Stepmates Auth.app */,
+				D4D3B58D2F4A25E600233376 /* Stepmates AuthTests.xctest */,
+				D4D3B5972F4A25E600233376 /* Stepmates AuthUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D4D3B5762F4A25E400233376 /* Stepmates Auth */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4D3B5A02F4A25E600233376 /* Build configuration list for PBXNativeTarget "Stepmates Auth" */;
+			buildPhases = (
+				D4D3B5732F4A25E400233376 /* Sources */,
+				D4D3B5742F4A25E400233376 /* Frameworks */,
+				D4D3B5752F4A25E400233376 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D4D3B5792F4A25E400233376 /* Stepmates Auth */,
+			);
+			name = "Stepmates Auth";
+			packageProductDependencies = (
+			);
+			productName = "Stepmates Auth";
+			productReference = D4D3B5772F4A25E400233376 /* Stepmates Auth.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D4D3B58C2F4A25E600233376 /* Stepmates AuthTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4D3B5A52F4A25E600233376 /* Build configuration list for PBXNativeTarget "Stepmates AuthTests" */;
+			buildPhases = (
+				D4D3B5892F4A25E600233376 /* Sources */,
+				D4D3B58A2F4A25E600233376 /* Frameworks */,
+				D4D3B58B2F4A25E600233376 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D4D3B58F2F4A25E600233376 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D4D3B5902F4A25E600233376 /* Stepmates AuthTests */,
+			);
+			name = "Stepmates AuthTests";
+			packageProductDependencies = (
+			);
+			productName = "Stepmates AuthTests";
+			productReference = D4D3B58D2F4A25E600233376 /* Stepmates AuthTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D4D3B5962F4A25E600233376 /* Stepmates AuthUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4D3B5A82F4A25E600233376 /* Build configuration list for PBXNativeTarget "Stepmates AuthUITests" */;
+			buildPhases = (
+				D4D3B5932F4A25E600233376 /* Sources */,
+				D4D3B5942F4A25E600233376 /* Frameworks */,
+				D4D3B5952F4A25E600233376 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D4D3B5992F4A25E600233376 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D4D3B59A2F4A25E600233376 /* Stepmates AuthUITests */,
+			);
+			name = "Stepmates AuthUITests";
+			packageProductDependencies = (
+			);
+			productName = "Stepmates AuthUITests";
+			productReference = D4D3B5972F4A25E600233376 /* Stepmates AuthUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D4D3B56F2F4A25E400233376 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					D4D3B5762F4A25E400233376 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					D4D3B58C2F4A25E600233376 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = D4D3B5762F4A25E400233376;
+					};
+					D4D3B5962F4A25E600233376 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = D4D3B5762F4A25E400233376;
+					};
+				};
+			};
+			buildConfigurationList = D4D3B5722F4A25E400233376 /* Build configuration list for PBXProject "Stepmates Auth" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D4D3B56E2F4A25E400233376;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D4D3B5782F4A25E400233376 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D4D3B5762F4A25E400233376 /* Stepmates Auth */,
+				D4D3B58C2F4A25E600233376 /* Stepmates AuthTests */,
+				D4D3B5962F4A25E600233376 /* Stepmates AuthUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D4D3B5752F4A25E400233376 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4D3B58B2F4A25E600233376 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4D3B5952F4A25E600233376 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D4D3B5732F4A25E400233376 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4D3B5892F4A25E600233376 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4D3B5932F4A25E600233376 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D4D3B58F2F4A25E600233376 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D4D3B5762F4A25E400233376 /* Stepmates Auth */;
+			targetProxy = D4D3B58E2F4A25E600233376 /* PBXContainerItemProxy */;
+		};
+		D4D3B5992F4A25E600233376 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D4D3B5762F4A25E400233376 /* Stepmates Auth */;
+			targetProxy = D4D3B5982F4A25E600233376 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D4D3B5A12F4A25E600233376 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Stepmates Auth/Info.plist";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "hz.Stepmates-Auth";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D4D3B5A22F4A25E600233376 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Stepmates Auth/Info.plist";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "hz.Stepmates-Auth";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		D4D3B5A32F4A25E600233376 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D4D3B5A42F4A25E600233376 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D4D3B5A62F4A25E600233376 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "hz.Stepmates-AuthTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stepmates Auth.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Stepmates Auth";
+			};
+			name = Debug;
+		};
+		D4D3B5A72F4A25E600233376 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "hz.Stepmates-AuthTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stepmates Auth.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Stepmates Auth";
+			};
+			name = Release;
+		};
+		D4D3B5A92F4A25E600233376 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "hz.Stepmates-AuthUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Stepmates Auth";
+			};
+			name = Debug;
+		};
+		D4D3B5AA2F4A25E600233376 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "hz.Stepmates-AuthUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Stepmates Auth";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D4D3B5722F4A25E400233376 /* Build configuration list for PBXProject "Stepmates Auth" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4D3B5A32F4A25E600233376 /* Debug */,
+				D4D3B5A42F4A25E600233376 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D4D3B5A02F4A25E600233376 /* Build configuration list for PBXNativeTarget "Stepmates Auth" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4D3B5A12F4A25E600233376 /* Debug */,
+				D4D3B5A22F4A25E600233376 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D4D3B5A52F4A25E600233376 /* Build configuration list for PBXNativeTarget "Stepmates AuthTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4D3B5A62F4A25E600233376 /* Debug */,
+				D4D3B5A72F4A25E600233376 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D4D3B5A82F4A25E600233376 /* Build configuration list for PBXNativeTarget "Stepmates AuthUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4D3B5A92F4A25E600233376 /* Debug */,
+				D4D3B5AA2F4A25E600233376 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D4D3B56F2F4A25E400233376 /* Project object */;
+}
