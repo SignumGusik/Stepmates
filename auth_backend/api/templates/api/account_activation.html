@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Account Activation</title>
+</head>
+<body>
+    {% if failed_reason %}
+        <h1>{{ failed_reason }}</h1>
+    {% else %}
+        <h1>Account Activated!</h1>
+    {% endif %}
+
+</body>
+</html>
