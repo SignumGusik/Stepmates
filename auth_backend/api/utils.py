@@ -184,3 +184,13 @@ def get_valid_registration_code(email, code):
         raise ValidationError("Срок действия кода истёк.")
 
     return user, verification
+
+def _avatar_url(request, user):
+
+    profile = getattr(user, "profile", None)
+
+    if not profile or not profile.avatar:
+
+        return None
+
+    return request.build_absolute_uri(profile.avatar.url)

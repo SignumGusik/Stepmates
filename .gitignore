@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+.idea/
+
+auth_backend/db.sqlite3
+auth_backend/media/
+auth_backend/IOS/Stepmates Auth.xcodeproj/project.xcworkspace/xcuserdata/

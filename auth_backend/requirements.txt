@@ -1,6 +1,16 @@
 asgiref==3.11.0
+certifi==2026.2.25
+dj-database-url==3.1.2
 Django==6.0.1
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
+gunicorn==26.0.0
+packaging==26.2
+pillow==12.2.0
+psycopg==3.3.3
+psycopg2-binary==2.9.12
 PyJWT==2.10.1
+python-dotenv==1.2.2
 sqlparse==0.5.5
+typing_extensions==4.15.0
+whitenoise==6.12.0
