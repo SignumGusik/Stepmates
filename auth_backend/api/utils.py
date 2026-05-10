@@ -155,17 +155,27 @@ def create_email_verification_code(user):
 def send_registration_code_email(user):
     verification = create_email_verification_code(user)
 
+    if getattr(settings, "DISABLE_EMAIL", False):
+        print("====================================")
+        print(f"REGISTRATION CODE for {user.email}: {verification.code}")
+        print("====================================")
+        return True
+
     subject = "Код подтверждения регистрации"
     message = f"Ваш код подтверждения: {verification.code}"
 
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.EMAIL_HOST_USER,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
-    return True
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.EMAIL_HOST_USER,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        return True
+    except Exception as e:
+        print("REGISTRATION EMAIL ERROR:", repr(e))
+        return False
 
 
 def get_valid_registration_code(email, code):
