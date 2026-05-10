@@ -188,60 +188,83 @@ class RegisterAppUser(GenericAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
-        confirm_password = request.data.get("password2")
-
-        if email is None or password is None or confirm_password is None:
-            print("REGISTER ERROR: missing data", email, password, confirm_password)
-            return Response("Missing Data", status=status.HTTP_400_BAD_REQUEST)
-
-        data_validation_errors = []
-
-        if password != confirm_password:
-            data_validation_errors.append("Password fields don't match")
+        import traceback
+        from django.conf import settings
 
         try:
-            validator = EmailValidator()
-            validator(email)
-        except ValidationError as e:
-            data_validation_errors.extend(e.messages)
+            print("REGISTER DEBUG START")
+            print("DISABLE_EMAIL =", getattr(settings, "DISABLE_EMAIL", None))
+            print("REQUEST DATA =", request.data)
 
-        if len(data_validation_errors) > 0:
-            print("REGISTER ERROR: validation", data_validation_errors)
-            return Response(data_validation_errors, status=status.HTTP_400_BAD_REQUEST)
+            email = request.data.get("email")
+            password = request.data.get("password")
+            confirm_password = request.data.get("password2")
 
-        existing_user = USER_MODEL.objects.filter(email=email).first()
+            if email is None or password is None or confirm_password is None:
+                print("REGISTER ERROR: missing data", email, password, confirm_password)
+                return Response("Missing Data", status=status.HTTP_400_BAD_REQUEST)
 
-        if existing_user is not None:
-            if existing_user.is_active:
-                print(f"REGISTER ERROR: user already exists -> {email}")
-                return Response(f"User {email} already exists", status=status.HTTP_400_BAD_REQUEST)
+            data_validation_errors = []
 
-            existing_user.set_password(password)
-            existing_user.username = email
-            existing_user.email = email
-            existing_user.save()
-            user = existing_user
-        else:
-            user = USER_MODEL.objects.create_user(
-                username=email,
-                email=email,
-                password=password,
-                is_active=False,
+            if password != confirm_password:
+                data_validation_errors.append("Password fields don't match")
+
+            try:
+                validator = EmailValidator()
+                validator(email)
+            except ValidationError as e:
+                data_validation_errors.extend(e.messages)
+
+            if len(data_validation_errors) > 0:
+                print("REGISTER ERROR: validation", data_validation_errors)
+                return Response(data_validation_errors, status=status.HTTP_400_BAD_REQUEST)
+
+            existing_user = USER_MODEL.objects.filter(email=email).first()
+            print("EXISTING USER =", existing_user)
+
+            if existing_user is not None:
+                if existing_user.is_active:
+                    print(f"REGISTER ERROR: user already exists -> {email}")
+                    return Response(f"User {email} already exists", status=status.HTTP_400_BAD_REQUEST)
+
+                existing_user.set_password(password)
+                existing_user.username = email
+                existing_user.email = email
+                existing_user.save()
+                user = existing_user
+            else:
+                user = USER_MODEL.objects.create_user(
+                    username=email,
+                    email=email,
+                    password=password,
+                    is_active=False,
+                )
+
+            print("USER CREATED/UPDATED =", user.id, user.email)
+
+            success = utils.send_registration_code_email(user)
+            print("EMAIL FUNCTION SUCCESS =", success)
+
+            if not success:
+                print(f"REGISTER ERROR: could not send registration code to {email}")
+                return Response("Could not send email", status=status.HTTP_400_BAD_REQUEST)
+
+            print(f"REGISTER OK: user created and code sent to {email}")
+            return Response(
+                {"detail": f"Код подтверждения отправлен на {email}"},
+                status=status.HTTP_201_CREATED,
             )
 
-        success = utils.send_registration_code_email(user)
-        if not success:
-            print(f"REGISTER ERROR: could not send registration code to {email}")
-            return Response("Could not send email", status=status.HTTP_400_BAD_REQUEST)
-
-        print(f"REGISTER OK: user created and code sent to {email}")
-        return Response(
-            {"detail": f"Код подтверждения отправлен на {email}"},
-            status=status.HTTP_201_CREATED,
-        )
-
+        except Exception as e:
+            print("REGISTER EXCEPTION:", repr(e))
+            traceback.print_exc()
+            return Response(
+                {
+                    "error": str(e),
+                    "type": type(e).__name__,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class ActivateAccount(TemplateView):
     template_name = "api/account_activation.html"
