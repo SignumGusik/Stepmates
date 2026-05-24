@@ -20,6 +20,12 @@ enum ContentType: String {
 }
 
 class NetworkHandler {
+    private let tokenStorage: AccessTokenStorage?
+
+    init(tokenStorage: AccessTokenStorage? = nil) {
+        self.tokenStorage = tokenStorage
+    }
+
     func request(
         _ url: URL,
         jsonDictionary: Any? = nil,
@@ -31,10 +37,33 @@ class NetworkHandler {
         if let jsonDictionary, let httpBody = try? JSONSerialization.data(withJSONObject: jsonDictionary) {
             urlRequest.httpBody = httpBody
         } else if jsonDictionary != nil {
-            print("Could not aerialize object into JSON data")
+            print("Could not serialize object into JSON data")
             throw ConfigurationError.nilObject
         }
-        
+
+        do {
+            return try await perform(urlRequest)
+        } catch NetworkError.failedStatusCodeResponseData(let statusCode, let responseData) where statusCode == 401 {
+            guard accessToken != nil else {
+                throw NetworkError.failedStatusCodeResponseData(statusCode, responseData)
+            }
+
+            guard let refreshedToken = try await refreshAccessToken() else {
+                throw NetworkError.failedStatusCodeResponseData(statusCode, responseData)
+            }
+
+            var retryRequest = makeUrlRequest(
+                url,
+                httpMethod: httpMethod,
+                contentType: contentType,
+                accessToken: refreshedToken.accessToken
+            )
+            retryRequest.httpBody = urlRequest.httpBody
+            return try await perform(retryRequest)
+        }
+    }
+
+    private func perform(_ urlRequest: URLRequest) async throws -> Data {
         let (data, response) = try await URLSession.shared.data(for: urlRequest)
         guard let httpResponse = response as? HTTPURLResponse else {
             print("Could not create HTTPURLResponse for: \(urlRequest.url?.absoluteString ?? "")")
@@ -50,7 +79,45 @@ class NetworkHandler {
         }
         return data
     }
-    
+
+    func refreshAccessToken() async throws -> AccessToken? {
+        guard let tokenStorage,
+              let currentToken = tokenStorage.get() else {
+            return nil
+        }
+
+        guard let url = NetworkRoutes.refreshToken.url else {
+            throw ConfigurationError.nilObject
+        }
+
+        var request = makeUrlRequest(
+            url,
+            httpMethod: NetworkRoutes.refreshToken.method.rawValue,
+            contentType: ContentType.json.rawValue,
+            accessToken: nil
+        )
+        request.httpBody = try JSONSerialization.data(
+            withJSONObject: ["refresh": currentToken.refreshToken]
+        )
+
+        do {
+            let data = try await perform(request)
+            let response = try JSONDecoder().decode(RefreshTokenResponse.self, from: data)
+            let updatedToken = AccessToken(
+                accessToken: response.access,
+                refreshToken: response.refresh ?? currentToken.refreshToken
+            )
+
+            tokenStorage.save(updatedToken)
+            return updatedToken
+        } catch NetworkError.failedStatusCodeResponseData(let statusCode, let responseData) where statusCode == 400 || statusCode == 401 {
+            tokenStorage.delete()
+            throw NetworkError.failedStatusCodeResponseData(statusCode, responseData)
+        } catch {
+            throw error
+        }
+    }
+
     func request<ResponseType: Decodable>(
         _ url: URL,
         jsonDictionary: Any? = nil,
@@ -106,36 +173,49 @@ extension NetworkHandler {
         accessToken: String
     ) async throws -> ResponseType {
 
-        let boundary = "Boundary-\(UUID().uuidString)"
+        func performUpload(accessToken: String, canRefreshToken: Bool) async throws -> ResponseType {
+            let boundary = "Boundary-\(UUID().uuidString)"
 
-        var request = URLRequest(url: url)
-        request.httpMethod = HttpMethod.put.rawValue
-        request.addValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.addValue("application/json", forHTTPHeaderField: "Accept")
-        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            var request = URLRequest(url: url)
+            request.httpMethod = HttpMethod.put.rawValue
+            request.addValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.addValue("application/json", forHTTPHeaderField: "Accept")
+            request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        // multipart body
-        var body = Data()
+            var body = Data()
 
-        body.appendString("--\(boundary)\r\n")
-        body.appendString("Content-Disposition: form-data; name=\"avatar\"; filename=\"\(fileName)\"\r\n")
-        body.appendString("Content-Type: \(mimeType)\r\n\r\n")
-        body.append(imageData)
-        body.appendString("\r\n")
-        body.appendString("--\(boundary)--\r\n")
+            body.appendString("--\(boundary)\r\n")
+            body.appendString("Content-Disposition: form-data; name=\"avatar\"; filename=\"\(fileName)\"\r\n")
+            body.appendString("Content-Type: \(mimeType)\r\n\r\n")
+            body.append(imageData)
+            body.appendString("\r\n")
+            body.appendString("--\(boundary)--\r\n")
 
-        request.httpBody = body
+            request.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkError.noResponse
-        }
-        guard 200...299 ~= httpResponse.statusCode else {
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NetworkError.noResponse
+            }
+
+            if 200...299 ~= httpResponse.statusCode {
+                return try JSONDecoder().decode(responseType, from: data)
+            }
+
+            if httpResponse.statusCode == 401,
+               canRefreshToken,
+               let refreshedToken = try await refreshAccessToken() {
+                return try await performUpload(
+                    accessToken: refreshedToken.accessToken,
+                    canRefreshToken: false
+                )
+            }
+
             throw NetworkError.failedStatusCodeResponseData(httpResponse.statusCode, data)
         }
 
-        return try JSONDecoder().decode(responseType, from: data)
+        return try await performUpload(accessToken: accessToken, canRefreshToken: true)
     }
 }
 
@@ -146,4 +226,3 @@ private extension Data {
         }
     }
 }
-

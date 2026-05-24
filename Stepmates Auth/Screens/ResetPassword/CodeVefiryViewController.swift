@@ -12,6 +12,20 @@ protocol CodeVerifyNavDelegate: AnyObject {
     func onRegistrationVerified()
     func onPasswordResetCodeVerified(code: String)
 }
+
+private final class CodeDigitTextField: UITextField {
+    var onDeleteBackwardFromEmptyField: ((CodeDigitTextField) -> Void)?
+
+    override func deleteBackward() {
+        let wasEmpty = text?.isEmpty ?? true
+        super.deleteBackward()
+
+        if wasEmpty, isFirstResponder {
+            onDeleteBackwardFromEmptyField?(self)
+        }
+    }
+}
+
 final class CodeVerifyViewController: UIViewController {
 
     private lazy var titleLabel = UILabel.makeTitle(text: "Введите код")
@@ -20,7 +34,7 @@ final class CodeVerifyViewController: UIViewController {
     )
 
     private lazy var codeStack = UIStackView.makeCodeInputStack()
-    private var codeFields: [UITextField] = []
+    private var codeFields: [CodeDigitTextField] = []
 
     private lazy var timerLabel = UILabel.makeManrope(text: "Повторно отправить код через 1:00", style: Constants.manropeMedium, size: 14)
 
@@ -107,8 +121,8 @@ private extension CodeVerifyViewController {
         codeFields.first?.becomeFirstResponder()
     }
 
-    func makeCodeField(tag: Int) -> UITextField {
-        let tf = UITextField()
+    func makeCodeField(tag: Int) -> CodeDigitTextField {
+        let tf = CodeDigitTextField()
         tf.translatesAutoresizingMaskIntoConstraints = false
         tf.tag = tag
 
@@ -124,7 +138,9 @@ private extension CodeVerifyViewController {
         tf.layer.borderColor = UIColor.clear.cgColor
 
         tf.delegate = self
-        tf.addTarget(self, action: #selector(onCodeChanged(_:)), for: .editingChanged)
+        tf.onDeleteBackwardFromEmptyField = { [weak self] textField in
+            self?.moveToPreviousField(from: textField.tag, clearPrevious: true)
+        }
         tf.textContentType = .oneTimeCode
 
         return tf
@@ -223,28 +239,6 @@ private extension CodeVerifyViewController {
         }
     }
 
-    @objc func onCodeChanged(_ sender: UITextField) {
-        if let text = sender.text, text.count > 1 {
-            sender.text = String(text.suffix(1))
-        }
-
-        updateFocusUI(activeIndex: sender.tag)
-
-        if let text = sender.text, text.isEmpty == false {
-            let nextIndex = sender.tag + 1
-            if nextIndex < codeFields.count {
-                updateFocusUI(activeIndex: nextIndex)
-                codeFields[nextIndex].becomeFirstResponder()
-            } else {
-                let code = codeFields.compactMap { $0.text }.joined()
-                if code.count == 6 {
-                    view.endEditing(true)
-                    verifyAndGoNext(code: code)
-                }
-            }
-        }
-    }
-
     func updateFocusUI(activeIndex: Int) {
         for (i, tf) in codeFields.enumerated() {
             if i == activeIndex {
@@ -254,6 +248,75 @@ private extension CodeVerifyViewController {
                 tf.layer.borderWidth = 0
                 tf.layer.borderColor = UIColor.clear.cgColor
             }
+        }
+    }
+
+    func focusField(at index: Int) {
+        guard codeFields.indices.contains(index) else {
+            return
+        }
+
+        updateFocusUI(activeIndex: index)
+        codeFields[index].becomeFirstResponder()
+    }
+
+    func moveToPreviousField(from index: Int, clearPrevious: Bool) {
+        let previousIndex = index - 1
+
+        guard codeFields.indices.contains(previousIndex) else {
+            focusField(at: max(index, 0))
+            return
+        }
+
+        if clearPrevious {
+            codeFields[previousIndex].text = ""
+        }
+
+        focusField(at: previousIndex)
+    }
+
+    func moveForwardOrVerify(after index: Int) {
+        let nextIndex = index + 1
+
+        if codeFields.indices.contains(nextIndex) {
+            focusField(at: nextIndex)
+            return
+        }
+
+        verifyIfCodeIsComplete()
+    }
+
+    func verifyIfCodeIsComplete() {
+        let codeParts = codeFields.map { $0.text ?? "" }
+        let code = codeParts.joined()
+
+        guard codeParts.allSatisfy({ $0.count == 1 }),
+              code.count == codeFields.count else {
+            return
+        }
+
+        view.endEditing(true)
+        verifyAndGoNext(code: code)
+    }
+
+    func fillCode(with string: String, startingAt startIndex: Int) {
+        let digits = string.filter { $0.isNumber }
+        var fieldIndex = startIndex
+
+        for digit in digits where codeFields.indices.contains(fieldIndex) {
+            codeFields[fieldIndex].text = String(digit)
+            fieldIndex += 1
+        }
+
+        if codeFields.allSatisfy({ ($0.text ?? "").count == 1 }) {
+            verifyIfCodeIsComplete()
+            return
+        }
+
+        if let firstEmptyIndex = codeFields.firstIndex(where: { ($0.text ?? "").isEmpty }) {
+            focusField(at: firstEmptyIndex)
+        } else {
+            focusField(at: min(fieldIndex, codeFields.count - 1))
         }
     }
 }
@@ -267,23 +330,29 @@ extension CodeVerifyViewController: UITextFieldDelegate {
 
         if string.isEmpty {
             if (textField.text ?? "").isEmpty {
-                let prevIndex = textField.tag - 1
-                if prevIndex >= 0 {
-                    codeFields[prevIndex].text = ""
-                    updateFocusUI(activeIndex: prevIndex)
-                    codeFields[prevIndex].becomeFirstResponder()
-                }
+                moveToPreviousField(from: textField.tag, clearPrevious: true)
             } else {
                 textField.text = ""
+                updateFocusUI(activeIndex: textField.tag)
             }
             return false
         }
 
-        return CharacterSet.decimalDigits.isSuperset(of: CharacterSet(charactersIn: string))
+        guard CharacterSet.decimalDigits.isSuperset(of: CharacterSet(charactersIn: string)) else {
+            return false
+        }
+
+        if string.count > 1 {
+            fillCode(with: string, startingAt: textField.tag)
+            return false
+        }
+
+        textField.text = string
+        moveForwardOrVerify(after: textField.tag)
+        return false
     }
 
     func textFieldDidBeginEditing(_ textField: UITextField) {
         updateFocusUI(activeIndex: textField.tag)
     }
 }
-

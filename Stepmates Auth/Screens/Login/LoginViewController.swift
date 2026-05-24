@@ -162,18 +162,28 @@ private extension LoginViewController {
         viewModel.email = emailTextField.text
         viewModel.password = passwordTextField.text
 
+        setSubmitting(true)
+
         Task {
             do {
                 try await viewModel.submitLogin()
                 await MainActor.run { [weak self] in
+                    self?.setSubmitting(false)
                     self?.navDelegate?.onLoginSuccessfull()
                 }
             } catch {
                 await MainActor.run { [weak self] in
-                    self?.showOkAlert(title: "Error", message: error.localizedDescription)
+                    self?.setSubmitting(false)
+                    self?.showOkAlert(title: "Не удалось войти", message: error.localizedDescription)
                 }
             }
         }
+    }
+
+    func setSubmitting(_ isSubmitting: Bool) {
+        submitButton.isEnabled = isSubmitting == false
+        submitButton.alpha = isSubmitting ? 0.72 : 1
+        submitButton.setTitle(isSubmitting ? "Входим..." : "Бежать дальше", for: .normal)
     }
 
     @objc func onRegisterTapped() {
@@ -218,5 +228,4 @@ extension LoginViewController: UITextFieldDelegate {
         return false
     }
 }
-
 

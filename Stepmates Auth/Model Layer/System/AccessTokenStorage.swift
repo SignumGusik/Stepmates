@@ -39,8 +39,8 @@ struct AccessTokenStorage {
     func delete() -> Bool {
         let deleteQuery: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrAccount: accountkey]
         
-        var status = SecItemDelete(deleteQuery as CFDictionary)
-        return status == errSecSuccess
+        let status = SecItemDelete(deleteQuery as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
     }
     
 }

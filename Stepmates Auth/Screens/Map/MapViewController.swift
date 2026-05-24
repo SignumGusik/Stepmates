@@ -23,9 +23,10 @@ final class MapViewController: UIViewController {
 
     private let trackingManager = TrackingManager.shared
 
-    private let mapService = MapService(
-        networkHandler: NetworkHandler(),
-        tokenStorage: AccessTokenStorage()
+    private let mapTokenStorage = AccessTokenStorage()
+    private lazy var mapService = MapService(
+        networkHandler: NetworkHandler(tokenStorage: mapTokenStorage),
+        tokenStorage: mapTokenStorage
     )
 
     private lazy var viewModel = MapViewModel(mapService: mapService)

@@ -52,7 +52,7 @@ class HomeViewController: UIViewController {
         arrangedSubviews: [groupsButton, friendsButton]
     )
     private lazy var todayLabel = UILabel.makeManrope(text: "Сегодня:", style: Constants.manropeMedium, size: 16)
-    private lazy var stepsLabel = UILabel.makeManrope(text: "9000 шагов", style: Constants.manropeBold, size: 40, color: Constants.blue ?? .systemBlue)
+    private lazy var stepsLabel = UILabel.makeManrope(text: "0 шагов", style: Constants.manropeBold, size: 40, color: Constants.blue ?? .systemBlue)
     private lazy var goalLabel = UILabel.makeManrope(text: "Цель: 10 000", style: Constants.manropeExtraBold, size: 20, color: Constants.orange ?? .orange)
 
     private let progressBar = GoalProgressView()
@@ -88,6 +88,7 @@ class HomeViewController: UIViewController {
     
     private var concellables = Set<AnyCancellable>()
     private var observers: [NSObjectProtocol] = []
+    private var isHealthKitReady = false
     
     weak var navDelegate: HomeNavDelegate?
     private let viewModel: ViewModel
@@ -123,6 +124,9 @@ extension HomeViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         loadHomeCounters()
+        if isHealthKitReady {
+            loadTodaySteps()
+        }
     }
 }
 
@@ -190,11 +194,16 @@ private extension HomeViewController {
             .addTo(statsCard)
             .pinTop(toAnchor: todayLabel.bottomAnchor, constant: 6)
             .pinLeft(toAnchor: statsCard.leftAnchor, constant: 18)
+            .pinRight(toAnchor: statsCard.rightAnchor, constant: -18)
+        stepsLabel.adjustsFontSizeToFitWidth = true
+        stepsLabel.minimumScaleFactor = 0.72
 
         goalLabel
             .addTo(statsCard)
             .pinTop(toAnchor: stepsLabel.bottomAnchor, constant: 6)
             .pinLeft(toAnchor: statsCard.leftAnchor, constant: 20)
+            .pinRight(toAnchor: statsCard.rightAnchor, constant: -20)
+        goalLabel.numberOfLines = 2
 
         // прогресс бар
         progressBar
@@ -269,6 +278,7 @@ private extension HomeViewController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            self?.loadHomeCounters()
             self?.loadTodaySteps()
         }
         
@@ -279,11 +289,23 @@ private extension HomeViewController {
 
 private extension HomeViewController {
     func setupHealthKit() {
+        guard HealthKitManager.shared.isHealthDataAvailable() else {
+            isHealthKitReady = false
+            showStepsUnavailableState(message: "Шаги недоступны на этом устройстве")
+            return
+        }
+
+        showStepsLoadingState()
+
         HealthKitManager.shared.requestAuthorization { [weak self] success in
             guard success else {
                 print("HealthKit authorization failed")
+                self?.isHealthKitReady = false
+                self?.showStepsUnavailableState(message: "Разрешите доступ к шагам в Здоровье")
                 return
             }
+
+            self?.isHealthKitReady = true
             
             HealthKitManager.shared.enableBackgroundDelivery()
             
@@ -296,18 +318,43 @@ private extension HomeViewController {
     }
     
     func loadTodaySteps() {
+        guard isHealthKitReady else {
+            return
+        }
+
+        guard HealthKitManager.shared.isHealthDataAvailable() else {
+            isHealthKitReady = false
+            showStepsUnavailableState(message: "Шаги недоступны на этом устройстве")
+            return
+        }
+
         HealthKitManager.shared.fetchTodaySteps { [weak self] stepsValue in
             guard let self else { return }
             
             let stepsInt = Int(stepsValue)
             self.steps = CGFloat(stepsValue)
             self.stepsLabel.text = "\(stepsInt) шагов"
+            self.goalLabel.text = "Цель: 10 000"
             self.progressBar.setProgress(min(CGFloat(stepsValue) / self.goal, 1), animated: true)
             
             Task {
                 await self.viewModel.syncTodaySteps(stepsInt)
             }
         }
+    }
+
+    func showStepsLoadingState() {
+        steps = 0
+        stepsLabel.text = "0 шагов"
+        goalLabel.text = "Шаги загружаются"
+        progressBar.setProgress(0, animated: false)
+    }
+
+    func showStepsUnavailableState(message: String) {
+        steps = 0
+        stepsLabel.text = "0 шагов"
+        goalLabel.text = message
+        progressBar.setProgress(0, animated: true)
     }
     
     func loadHomeCounters() {
@@ -421,7 +468,6 @@ private extension HomeViewController {
         navDelegate?.onFriendsTapped()
     }
     @objc func onNotificationsTapped() {
-        notificationsDotView.isHidden = true
         navDelegate?.onNotificationsTapped()
     }
     @objc private func onGroupsTapped() {

@@ -12,6 +12,7 @@ enum NetworkRoutes {
     
     case register
     case accessToken
+    case refreshToken
     case fatchData
     case searchUsers(query: String)
     case createFriendRequest
@@ -72,6 +73,8 @@ enum NetworkRoutes {
             path = NetworkRoutes.baseUrl + "api/register/"
         case .accessToken:
             path = NetworkRoutes.baseUrl + "api/auth/token/"
+        case .refreshToken:
+            path = NetworkRoutes.baseUrl + "api/auth/token/refresh"
         case .fatchData:
             path = NetworkRoutes.baseUrl + "api/login_data/"
         case .searchUsers(query: let query):
@@ -184,6 +187,8 @@ enum NetworkRoutes {
         case .register:
             return .post
         case .accessToken:
+            return .post
+        case .refreshToken:
             return .post
         case .fatchData:
             return .get

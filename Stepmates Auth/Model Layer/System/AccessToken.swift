@@ -17,3 +17,8 @@ struct AccessToken: Codable {
         
     }
 }
+
+struct RefreshTokenResponse: Decodable {
+    let access: String
+    let refresh: String?
+}

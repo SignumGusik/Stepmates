@@ -34,8 +34,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         appNavCoordinator.start()
         configureNavigationBar()
         
-        let networkHandler = NetworkHandler()
         let tokenStorage = AccessTokenStorage()
+        let networkHandler = NetworkHandler(tokenStorage: tokenStorage)
         let mapService = MapService(networkHandler: networkHandler, tokenStorage: tokenStorage)
 
         TrackingManager.shared.configure(mapService: mapService)

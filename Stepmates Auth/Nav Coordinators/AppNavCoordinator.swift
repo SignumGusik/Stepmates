@@ -12,7 +12,7 @@ class AppNavCoordinator {
     var presenter: UINavigationController
     
     let tokenStorage = AccessTokenStorage()
-    private let networkHandler = NetworkHandler()
+    private lazy var networkHandler = NetworkHandler(tokenStorage: tokenStorage)
     private lazy var friendsService = FriendsService(
         networkHandler: networkHandler,
         tokenStorage: tokenStorage
@@ -48,16 +48,63 @@ class AppNavCoordinator {
         }
     }
     private func showInitialScreenAfterSplash() {
-        if tokenStorage.get() != nil {
-            showHomeScreen()
-        } else {
-            showLoginScreen()
+        Task { [weak self] in
+            guard let self else { return }
+
+            let hasValidSession = await self.hasValidStoredSession()
+
+            await MainActor.run {
+                if hasValidSession {
+                    self.showHomeScreen()
+                } else {
+                    self.showLoginScreen()
+                }
+            }
         }
     }
     
     func logout() {
+        tokenStorage.delete()
         showLoginScreen()
         
+    }
+
+    private func hasValidStoredSession() async -> Bool {
+        guard tokenStorage.get() != nil else {
+            return false
+        }
+
+        do {
+            _ = try await networkHandler.refreshAccessToken()
+            return true
+        } catch NetworkError.failedStatusCodeResponseData(let statusCode, _) where statusCode == 400 || statusCode == 401 {
+            tokenStorage.delete()
+            return false
+        } catch {
+            // Если сеть временно недоступна, не выкидываем пользователя из аккаунта.
+            return true
+        }
+    }
+
+    private func makeHomeController() -> HomeViewController {
+        let viewModel = HomeViewController.ViewModel(
+            username: "SignumGusik",
+            networkHandler: networkHandler,
+            tokenStorage: tokenStorage
+        )
+        let controller = HomeViewController(viewModel: viewModel)
+        controller.navDelegate = self
+        return controller
+    }
+
+    private func makeLoginController() -> LoginViewController {
+        let viewModel = LoginViewController.ViewModel(
+            networkHandler: networkHandler,
+            tokenStorage: tokenStorage
+        )
+        let controller = LoginViewController(viewModel: viewModel)
+        controller.navDelegate = self
+        return controller
     }
     
 }
@@ -89,14 +136,7 @@ extension AppNavCoordinator {
     }
     
     func showHomeScreen() {
-        let viewModel = HomeViewController.ViewModel(
-            username: "SignumGusik",
-            networkHandler: networkHandler,
-            tokenStorage: tokenStorage
-        )
-        let controller = HomeViewController(viewModel: viewModel)
-        controller.navDelegate = self
-        presenter.setViewControllers([controller], animated: true)
+        presenter.setViewControllers([makeHomeController()], animated: true)
     }
 
     func shoeRegistrationScreen() {
@@ -107,13 +147,7 @@ extension AppNavCoordinator {
     }
 
     func showLoginScreen() {
-        let viewModel = LoginViewController.ViewModel(
-            networkHandler: networkHandler,
-            tokenStorage: tokenStorage
-        )
-        let controller = LoginViewController(viewModel: viewModel)
-        controller.navDelegate = self
-        presenter.setViewControllers([controller], animated: true)
+        presenter.setViewControllers([makeLoginController()], animated: true)
     }
 
     func showSearchFriendsScreen() {
@@ -511,33 +545,24 @@ extension AppNavCoordinator: MapNavDelegate {
 
 extension AppNavCoordinator: SplashNavDelegate {
     func onSplashFinished() {
-        let nextController: UIViewController
+        Task { [weak self] in
+            guard let self else { return }
 
-        if tokenStorage.get() != nil {
-            let viewModel = HomeViewController.ViewModel(
-                username: "SignumGusik",
-                networkHandler: networkHandler,
-                tokenStorage: tokenStorage
-            )
-            let home = HomeViewController(viewModel: viewModel)
-            home.navDelegate = self
-            nextController = home
-        } else {
-            let viewModel = LoginViewController.ViewModel(
-                networkHandler: networkHandler,
-                tokenStorage: tokenStorage
-            )
-            let login = LoginViewController(viewModel: viewModel)
-            login.navDelegate = self
-            nextController = login
-        }
+            let hasValidSession = await self.hasValidStoredSession()
 
-        UIView.transition(
-            with: window,
-            duration: 0.45,
-            options: [.transitionCrossDissolve]
-        ) {
-            self.presenter.setViewControllers([nextController], animated: false)
+            await MainActor.run {
+                let nextController: UIViewController = hasValidSession
+                    ? self.makeHomeController()
+                    : self.makeLoginController()
+
+                UIView.transition(
+                    with: self.window,
+                    duration: 0.45,
+                    options: [.transitionCrossDissolve]
+                ) {
+                    self.presenter.setViewControllers([nextController], animated: false)
+                }
+            }
         }
     }
 }

@@ -15,9 +15,14 @@ final class HealthKitManager {
     private var observerQuery: HKObserverQuery?
     
     private init() {}
+
+    func isHealthDataAvailable() -> Bool {
+        HKHealthStore.isHealthDataAvailable()
+            && HKObjectType.quantityType(forIdentifier: .stepCount) != nil
+    }
     
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
-        guard HKHealthStore.isHealthDataAvailable(),
+        guard isHealthDataAvailable(),
               let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
             print("HealthKit is not available or step type is nil")
             completion(false)
