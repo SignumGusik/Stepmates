@@ -13,13 +13,15 @@ struct FriendLeaderboardResponse: Decodable {
     let username: String
     let steps: Int
     let isMe: Bool
-    
+    let avatarUrl: String?
+
     enum CodingKeys: String, CodingKey {
         case place
         case userId = "user_id"
         case username
         case steps
         case isMe = "is_me"
+        case avatarUrl = "avatar_url"
     }
 }
 

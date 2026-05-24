@@ -19,6 +19,9 @@ class AppNavCoordinator {
     )
     let didCompleteFirstLaunch = "com.signumina"
     private var lastResetEmail: String = ""
+    private weak var currentCreateGroupController: CreateGroupViewController?
+    private weak var currentGroupSettingsController: GroupSettingsViewController?
+    private var shouldShowSplash = true
     
     init(window: UIWindow) {
         self.window = window
@@ -31,17 +34,25 @@ class AppNavCoordinator {
     
     func start() {
         let userDefaults = UserDefaults.standard
+
         if !userDefaults.bool(forKey: didCompleteFirstLaunch) {
             tokenStorage.delete()
             userDefaults.setValue(true, forKey: didCompleteFirstLaunch)
         }
+
+        if shouldShowSplash {
+            shouldShowSplash = false
+            showSplashScreen()
+        } else {
+            showInitialScreenAfterSplash()
+        }
+    }
+    private func showInitialScreenAfterSplash() {
         if tokenStorage.get() != nil {
             showHomeScreen()
         } else {
             showLoginScreen()
         }
-        
-        
     }
     
     func logout() {
@@ -71,6 +82,11 @@ extension AppNavCoordinator {
 
 // MARK: - Showing Screens
 extension AppNavCoordinator {
+    func showSplashScreen() {
+        let controller = SplashViewController()
+        controller.navDelegate = self
+        presenter.setViewControllers([controller], animated: false)
+    }
     
     func showHomeScreen() {
         let viewModel = HomeViewController.ViewModel(
@@ -131,17 +147,22 @@ extension AppNavCoordinator {
         presenter.pushViewController(controller, animated: true)
     }
 
-    func showSelectedUserScreen(_ user: AccessUsers) {
-        let viewModel = SelectedUserViewController.ViewModel(
+    func showSelectedUserScreen(
+        _ user: AccessUsers,
+        source: SelectedUserProfileSource,
+        isOwnProfile: Bool = false
+    ) {
+        let vm = SelectedUserViewController.ViewModel(
+            user: user,
+            source: source,
+            isOwnProfile: isOwnProfile,
             networkHandler: networkHandler,
-            tokenStorage: tokenStorage,
-            user: user
+            friendsService: friendsService,
+            tokenStorage: tokenStorage
         )
-        let controller = SelectedUserViewController(viewModel: viewModel)
-        controller.modalPresentationStyle = .overFullScreen
-        controller.modalTransitionStyle = .crossDissolve
+        let vc = SelectedUserViewController(viewModel: vm)
 
-        presenter.present(controller, animated: true)
+        presenter.present(vc, animated: true)
     }
 
     func showResetPasswordScreen() {
@@ -176,7 +197,11 @@ extension AppNavCoordinator {
     }
     
     func showSettingsScreen(username: String) {
-        let viewModel = SettingsViewController.ViewModel(username: username)
+        let viewModel = SettingsViewController.ViewModel(
+            username: username,
+            networkHandler: networkHandler,
+            tokenStorage: tokenStorage
+        )
         let controller = SettingsViewController(viewModel: viewModel)
         controller.navDelegate = self
         presenter.pushViewController(controller, animated: true)
@@ -188,6 +213,77 @@ extension AppNavCoordinator {
         )
         let controller = UsernameViewController(viewModel: viewModel)
         controller.navDelegate = self
+        presenter.pushViewController(controller, animated: true)
+    }
+    func showMapScreen() {
+        let controller = MapViewController()
+        controller.navDelegate = self
+        controller.onFriendTap = { [weak self] friend in
+            self?.showFriendFromMap(friend)
+        }
+        presenter.pushViewController(controller, animated: true)
+    }
+    func showFriendFromMap(_ friend: FriendLiveLocation) {
+        let user = AccessUsers(
+            id: friend.userId,
+            username: friend.username,
+            email: "",
+            firstName: "",
+            lastName: "",
+            isFriend: true,
+            requestSent: false,
+            requestReceived: false,
+            avatarUrl: friend.avatarUrl
+        )
+        
+        showSelectedUserScreen(
+            user,
+            source: .leaderboard,
+            isOwnProfile: false
+        )
+    }
+    func showGroupsScreen() {
+        let viewModel = GroupsViewController.ViewModel(
+            networkHandler: networkHandler,
+            tokenStorage: tokenStorage
+        )
+        let controller = GroupsViewController(viewModel: viewModel)
+        controller.navDelegate = self
+        presenter.pushViewController(controller, animated: true)
+    }
+    
+    func showCreateGroupScreen() {
+        let viewModel = CreateGroupViewController.ViewModel(
+            networkHandler: networkHandler,
+            tokenStorage: tokenStorage
+        )
+
+        let controller = CreateGroupViewController(viewModel: viewModel)
+        controller.navDelegate = self
+        currentCreateGroupController = controller
+        presenter.pushViewController(controller, animated: true)
+    }
+    func showGroupScreen(group: GroupListItem) {
+        let viewModel = GroupViewController.ViewModel(
+            group: group,
+            networkHandler: networkHandler,
+            tokenStorage: tokenStorage
+        )
+
+        let controller = GroupViewController(viewModel: viewModel)
+        controller.navDelegate = self
+        presenter.pushViewController(controller, animated: true)
+    }
+    func showGroupSettingsScreen(group: GroupListItem) {
+        let viewModel = GroupSettingsViewController.ViewModel(
+            group: group,
+            networkHandler: networkHandler,
+            tokenStorage: tokenStorage
+        )
+
+        let controller = GroupSettingsViewController(viewModel: viewModel)
+        controller.navDelegate = self
+        currentGroupSettingsController = controller
         presenter.pushViewController(controller, animated: true)
     }
     
@@ -207,6 +303,12 @@ extension AppNavCoordinator: HomeNavDelegate {
     
     func onSettingsTapped(username: String) {
         showSettingsScreen(username: username)
+    }
+    func onMapTapped() {
+        showMapScreen()
+    }
+    func onGroupsTapped() {
+        showGroupsScreen()
     }
 }
 
@@ -243,9 +345,13 @@ extension AppNavCoordinator: RegisterNavDelegate {
 }
 
 extension AppNavCoordinator: FriendsNavDelegate {
-    
+
     func onSearchFriendsTapped() {
         showSearchFriendsScreen()
+    }
+
+    func onUserSelected(_ user: AccessUsers, source: SelectedUserProfileSource, isOwnProfile: Bool) {
+        showSelectedUserScreen(user, source: source, isOwnProfile: isOwnProfile)
     }
 }
 
@@ -253,9 +359,20 @@ extension AppNavCoordinator: SearchFriendsNavDelegate {
     func onCloseSearchTapped() {
         presenter.popViewController(animated: true)
     }
-    
-    func onUserSelected(_ user: AccessUsers) {
-        showSelectedUserScreen(user)
+
+    func onUserSelected(_ user: AccessUsers, source: SelectedUserProfileSource) {
+        showSelectedUserScreen(user, source: source, isOwnProfile: false)
+    }
+
+    func onGroupMemberSelected(_ user: AccessUsers) {
+        if let settings = currentGroupSettingsController {
+            settings.addMember(user)
+            presenter.popViewController(animated: true)
+            return
+        }
+
+        currentCreateGroupController?.addMember(user)
+        presenter.popViewController(animated: true)
     }
 }
 
@@ -305,6 +422,9 @@ extension AppNavCoordinator: SettingsNavDelegate {
         tokenStorage.delete()
         showLoginScreen()
     }
+    func onAddFriendFromSettingsTapped() {
+        showSearchFriendsScreen()
+    }
 }
 extension AppNavCoordinator: UsernameNavDelegate {
     func onUsernameSubmitted(username: String) {
@@ -312,4 +432,112 @@ extension AppNavCoordinator: UsernameNavDelegate {
     }
 }
 
+extension AppNavCoordinator: GroupsNavDelegate {
+    func onBackFromGroups() {
+        presenter.popViewController(animated: true)
+    }
+    func onCreateGroupTapped() {
+        showCreateGroupScreen()
+    }
+    func onGroupSelected(_ group: GroupListItem) {
+        showGroupScreen(group: group)
+    }
+}
 
+extension AppNavCoordinator: CreateGroupNavDelegate {
+
+    func onAddGroupMemberTapped(selectedUserIds: Set<Int>) {
+        let viewModel = SearchFriendsViewController.ViewModel(
+            networkHandler: networkHandler,
+            friendsService: friendsService,
+            tokenStorage: tokenStorage
+        )
+
+        let controller = SearchFriendsViewController(
+            viewModel: viewModel,
+            mode: .groupMemberSearch(selectedUserIds: selectedUserIds)
+        )
+
+        controller.navDelegate = self
+        presenter.pushViewController(controller, animated: true)
+    }
+
+    func onGroupCreated() {
+        presenter.popViewController(animated: true)
+    }
+}
+
+extension AppNavCoordinator: GroupNavDelegate {
+    func onEditGroupTapped(group: GroupListItem) {
+        showGroupSettingsScreen(group: group)
+    }
+    func onGroupLeft() {
+        presenter.popViewController(animated: true)
+    }
+}
+
+extension AppNavCoordinator: GroupSettingsNavDelegate {
+
+    func onBackFromGroupSettings() {
+        presenter.popViewController(animated: true)
+    }
+
+    func onAddMemberToExistingGroup(selectedUserIds: Set<Int>) {
+        let viewModel = SearchFriendsViewController.ViewModel(
+            networkHandler: networkHandler,
+            friendsService: friendsService,
+            tokenStorage: tokenStorage
+        )
+
+        let controller = SearchFriendsViewController(
+            viewModel: viewModel,
+            mode: .groupMemberSearch(selectedUserIds: selectedUserIds)
+        )
+
+        controller.navDelegate = self
+        presenter.pushViewController(controller, animated: true)
+    }
+}
+
+extension AppNavCoordinator: MapNavDelegate {
+    func onFriendsRankingTapped() {
+        showFriendsScreen()
+    }
+
+    func onGroupRankingTapped(groupId: Int) {
+        showGroupsScreen()
+    }
+}
+
+extension AppNavCoordinator: SplashNavDelegate {
+    func onSplashFinished() {
+        let nextController: UIViewController
+
+        if tokenStorage.get() != nil {
+            let viewModel = HomeViewController.ViewModel(
+                username: "SignumGusik",
+                networkHandler: networkHandler,
+                tokenStorage: tokenStorage
+            )
+            let home = HomeViewController(viewModel: viewModel)
+            home.navDelegate = self
+            nextController = home
+        } else {
+            let viewModel = LoginViewController.ViewModel(
+                networkHandler: networkHandler,
+                tokenStorage: tokenStorage
+            )
+            let login = LoginViewController(viewModel: viewModel)
+            login.navDelegate = self
+            nextController = login
+        }
+
+        UIView.transition(
+            with: window,
+            duration: 0.45,
+            options: [.transitionCrossDissolve]
+        ) {
+            self.presenter.setViewControllers([nextController], animated: false)
+        }
+    }
+}

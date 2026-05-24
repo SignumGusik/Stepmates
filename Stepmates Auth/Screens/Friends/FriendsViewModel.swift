@@ -4,6 +4,7 @@
 //
 //  Created by Диана on 02/02/2026.
 //
+
 import Foundation
 import UIKit
 
@@ -12,7 +13,7 @@ extension FriendsViewController {
         private let networkHandler: NetworkHandler
         private let friendsService: FriendsService
         private let tokenStorage: AccessTokenStorage
-        
+
         init(networkHandler: NetworkHandler, friendsService: FriendsService, tokenStorage: AccessTokenStorage) {
             self.networkHandler = networkHandler
             self.friendsService = friendsService
@@ -22,31 +23,46 @@ extension FriendsViewController {
 }
 
 extension FriendsViewController.ViewModel {
-    func getLeaderboardItems() async -> [FriendLeaderboardItem] {
+
+    func getLeaderboardItems(period: FriendsViewController.LeaderboardPeriod) async -> [FriendLeaderboardItem] {
         let route = NetworkRoutes.friendsLeaderboard
-        let method = route.method
-        
-        guard let url = route.url,
-              let accessToken = tokenStorage.get() else {
-            print("No Url access token found")
+
+        guard
+            let baseURL = route.url,
+            let accessToken = tokenStorage.get()?.accessToken
+        else {
+            print("No Url/access token found")
             return []
         }
-        
+
+        var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        var q = comps?.queryItems ?? []
+        q.append(URLQueryItem(name: "period", value: period.rawValue))
+        comps?.queryItems = q
+
+        guard let url = comps?.url else {
+            print("Could not build URLComponents url")
+            return []
+        }
+
         do {
             let response = try await networkHandler.request(
                 url,
                 responseType: [FriendLeaderboardResponse].self,
-                httpMethod: method.rawValue,
-                accessToken: accessToken.accessToken
+                httpMethod: route.method.rawValue,
+                accessToken: accessToken
             )
-            
+
             return response.map { item in
                 FriendLeaderboardItem(
+                    userId: item.userId,
                     username: item.username,
                     place: item.place,
                     steps: item.steps,
                     avatarColor: randomColor(for: item.username),
-                    isCurrentUser: item.isMe
+                    isCurrentUser: item.isMe,
+                    avatarUrl: item.avatarUrl,
+                    avatarImage: nil
                 )
             }
         } catch {
@@ -54,7 +70,7 @@ extension FriendsViewController.ViewModel {
             return []
         }
     }
-    
+
     private func randomColor(for username: String) -> UIColor {
         let colors: [UIColor] = [
             Constants.purple ?? .systemBlue,
@@ -64,7 +80,7 @@ extension FriendsViewController.ViewModel {
             UIColor(hex: "#000000") ?? .black,
             UIColor(hex: "#D7A692") ?? .brown
         ]
-        
+
         let index = abs(username.hashValue) % colors.count
         return colors[index]
     }

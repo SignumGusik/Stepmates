@@ -19,13 +19,35 @@ final class HealthKitManager {
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable(),
               let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
+            print("HealthKit is not available or step type is nil")
             completion(false)
             return
         }
         
-        healthStore.requestAuthorization(toShare: [], read: [stepType]) { success, _ in
+        healthStore.requestAuthorization(toShare: [], read: [stepType]) { success, error in
+            if let error {
+                print("HealthKit authorization error:", error.localizedDescription)
+            }
+            
             DispatchQueue.main.async {
                 completion(success)
+            }
+        }
+    }
+    
+    func enableBackgroundDelivery() {
+        guard let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
+            return
+        }
+
+        healthStore.enableBackgroundDelivery(
+            for: stepType,
+            frequency: .immediate
+        ) { success, error in
+            if let error {
+                print("HealthKit background delivery error:", error.localizedDescription)
+            } else {
+                print("HealthKit background delivery enabled:", success)
             }
         }
     }
@@ -47,7 +69,11 @@ final class HealthKitManager {
             quantityType: stepType,
             quantitySamplePredicate: predicate,
             options: .cumulativeSum
-        ) { _, result, _ in
+        ) { _, result, error in
+            if let error {
+                print("HealthKit fetch steps error:", error.localizedDescription)
+            }
+
             let steps = result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
             
             DispatchQueue.main.async {
@@ -65,7 +91,7 @@ final class HealthKitManager {
         
         observerQuery = HKObserverQuery(sampleType: stepType, predicate: nil) { _, completionHandler, error in
             if let error {
-                print("HKObserverQuery error: \(error)")
+                print("HKObserverQuery error:", error.localizedDescription)
                 completionHandler()
                 return
             }

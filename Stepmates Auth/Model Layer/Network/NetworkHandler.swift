@@ -12,6 +12,7 @@ enum HttpMethod: String {
     case post = "POST"
     case put = "PUT"
     case delete = "DELETE"
+    case patch = "PATCH"
 }
 
 enum ContentType: String {
@@ -41,6 +42,10 @@ class NetworkHandler {
         }
         let statusCode = httpResponse.statusCode
         guard 200...299 ~= statusCode else {
+            let body = String(data: data, encoding: .utf8) ?? "No response body"
+            print("HTTP ERROR:", statusCode)
+            print("URL:", urlRequest.url?.absoluteString ?? "nil")
+            print("BODY:", body)
             throw NetworkError.failedStatusCodeResponseData(statusCode, data)
         }
         return data
@@ -92,6 +97,53 @@ extension NetworkHandler {
         }
         return urlRequest
     }
+    func uploadAvatar<ResponseType: Decodable>(
+        _ url: URL,
+        imageData: Data,
+        fileName: String = "avatar.jpg",
+        mimeType: String = "image/jpeg",
+        responseType: ResponseType.Type,
+        accessToken: String
+    ) async throws -> ResponseType {
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        var request = URLRequest(url: url)
+        request.httpMethod = HttpMethod.put.rawValue
+        request.addValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        // multipart body
+        var body = Data()
+
+        body.appendString("--\(boundary)\r\n")
+        body.appendString("Content-Disposition: form-data; name=\"avatar\"; filename=\"\(fileName)\"\r\n")
+        body.appendString("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(imageData)
+        body.appendString("\r\n")
+        body.appendString("--\(boundary)--\r\n")
+
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.noResponse
+        }
+        guard 200...299 ~= httpResponse.statusCode else {
+            throw NetworkError.failedStatusCodeResponseData(httpResponse.statusCode, data)
+        }
+
+        return try JSONDecoder().decode(responseType, from: data)
+    }
 }
 
+private extension Data {
+    mutating func appendString(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            append(data)
+        }
+    }
+}
 

@@ -7,140 +7,226 @@
 
 import UIKit
 
-class NotificationsViewController: UIViewController {
-    private static let cellId = "cell"
+final class NotificationsViewController: UIViewController {
 
-    private lazy var tableView = UITableView.makeUsersTable(
-            dataSource: self,
-            delegate: nil
-    )
     private let viewModel: ViewModel
-    private var incoming: [AccessFriendRequests] = []
+    private var items: [AppNotificationDTO] = []
+
+    private lazy var titleLabel = UILabel.makeManrope(
+        text: "Уведомления",
+        style: Constants.manropeExtraBold,
+        size: 32,
+        color: Constants.blue ?? .systemBlue
+    )
+
+    private lazy var emptyLabel = UILabel.makeManrope(
+        text: "Новых уведомлений пока нет",
+        style: Constants.manropeMedium,
+        size: 18,
+        color: .systemGray
+    )
+
+    private lazy var tableView: UITableView = {
+        let table = UITableView.makeLeaderboardTable(dataSource: self, delegate: self)
+        table.register(NotificationRequestCell.self, forCellReuseIdentifier: NotificationRequestCell.reuseId)
+        table.rowHeight = 64
+        table.separatorStyle = .none
+        table.backgroundColor = .clear
+        return table
+    }()
+
+    private let refreshControl = UIRefreshControl()
+
     required init(viewModel: ViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
-    
+
     required init?(coder: NSCoder) {
         preconditionFailure("init(coder:) not used")
     }
-    
-    
 }
 
+// MARK: - Lifecycle
 extension NotificationsViewController {
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationController?.navigationBar.tintColor = .black
         setupViews()
-        
+        loadNotifications()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        loadNotifications()
     }
 }
 
-extension NotificationsViewController {
+// MARK: - Setup
+private extension NotificationsViewController {
+
     func setupViews() {
-        tableView.register(NotificationRequestCell.self, forCellReuseIdentifier: NotificationRequestCell.reuseId)
+        view.backgroundColor = .white
+
+        refreshControl.addTarget(self, action: #selector(onRefresh), for: .valueChanged)
+        tableView.refreshControl = refreshControl
+
+        titleLabel
+            .addTo(view)
+            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
+            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
+
         tableView
             .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: 0)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 0)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
+            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 25)
+            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor)
+            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor)
+            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor)
+
+        emptyLabel.textAlignment = .center
+
+        emptyLabel
+            .addTo(view)
+            .centerXOn(view)
+            .centerYOn(view)
+            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 20)
+            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -20)
+    }
+
+    func loadNotifications() {
         Task { [weak self] in
-                    guard let self else { return }
-                    do {
-                        let items = try await self.viewModel.incomingFriendRequests()
-                        await MainActor.run {
-                            self.incoming = items
-                            self.tableView.reloadData()
-                        }
-                    } catch {
-                        await MainActor.run {
-                            self.showOkAlert(title: "Error", message: error.localizedDescription)
+            guard let self else { return }
+
+            do {
+                let result = try await viewModel.getNotifications()
+
+                await MainActor.run {
+                    self.items = result
+                    self.tableView.reloadData()
+                    self.refreshControl.endRefreshing()
+                    self.updateEmptyState()
+                }
+            } catch {
+                await MainActor.run {
+                    self.refreshControl.endRefreshing()
+                    self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
                 }
             }
         }
+    }
+
+    func updateEmptyState() {
+        let isEmpty = items.isEmpty
+        emptyLabel.isHidden = !isEmpty
+        tableView.isHidden = isEmpty
     }
 }
 
-extension NotificationsViewController {
-    private func loadIncoming() {
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let items = try await viewModel.incomingFriendRequests()
-                await MainActor.run {
-                    self.incoming = items
-                    self.tableView.reloadData()
-                }
-            } catch {
-                await MainActor.run {
-                    self.showOkAlert(title: "Error", message: error.localizedDescription)
-                }
-            }
-        }
+// MARK: - Actions
+private extension NotificationsViewController {
+
+    @objc func onRefresh() {
+        loadNotifications()
     }
-    private func accept(req: AccessFriendRequests) {
+
+    func accept(item: AppNotificationDTO) {
         Task { [weak self] in
             guard let self else { return }
+
             do {
-                try await viewModel.acceptRequest(req)
+                switch item.type {
+                case .friendRequest:
+                    try await viewModel.acceptFriendRequest(id: item.id)
+
+                case .groupInvite:
+                    try await viewModel.acceptGroupInvite(id: item.id)
+
+                case .friendRequestAccepted:
+                    try await viewModel.dismissFriendAcceptedNotification(id: item.id)
+                }
+
                 await MainActor.run {
-                    self.incoming.removeAll { $0.id == req.id }
+                    self.items.removeAll { $0.id == item.id && $0.type == item.type }
                     self.tableView.reloadData()
+                    self.updateEmptyState()
                 }
             } catch {
                 await MainActor.run {
-                    self.showOkAlert(title: "Error", message: self.serverMessage(from: error))
+                    self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
                 }
             }
         }
     }
 
-        	
-    private func reject(req: AccessFriendRequests) {
+    func reject(item: AppNotificationDTO) {
         Task { [weak self] in
             guard let self else { return }
+
             do {
-                try await viewModel.rejectRequest(req)
+                switch item.type {
+                case .friendRequest:
+                    try await viewModel.rejectFriendRequest(id: item.id)
+
+                case .groupInvite:
+                    try await viewModel.rejectGroupInvite(id: item.id)
+
+                case .friendRequestAccepted:
+                    return
+                }
+
                 await MainActor.run {
-                    self.incoming.removeAll { $0.id == req.id }
+                    self.items.removeAll { $0.id == item.id && $0.type == item.type }
                     self.tableView.reloadData()
+                    self.updateEmptyState()
                 }
             } catch {
                 await MainActor.run {
-                    self.showOkAlert(title: "Error", message: self.serverMessage(from: error))
+                    self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
                 }
             }
         }
     }
 
-    private func serverMessage(from error: Error) -> String {
+    func serverMessage(from error: Error) -> String {
         if case let NetworkError.failedStatusCodeResponseData(_, data) = error,
            let text = String(data: data, encoding: .utf8) {
             return text
         }
+
         return error.localizedDescription
     }
 }
-extension NotificationsViewController : UITableViewDataSource {
+
+// MARK: - UITableViewDataSource
+extension NotificationsViewController: UITableViewDataSource, UITableViewDelegate {
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return incoming.count
+        items.count
     }
-    
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+
+    func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
         guard let cell = tableView.dequeueReusableCell(
-                withIdentifier: NotificationRequestCell.reuseId,
-                for: indexPath
-            ) as? NotificationRequestCell else {
-                return UITableViewCell()
-            }
-        let req = incoming[indexPath.row]
-        cell.configure(title: req.fromUser.username, subtitle: req.fromUser.email)
-        cell.onAcceptTapped = { [weak self] in self?.accept(req: req) }
-        cell.onRejectTapped = { [weak self] in self?.reject(req: req) }
+            withIdentifier: NotificationRequestCell.reuseId,
+            for: indexPath
+        ) as? NotificationRequestCell else {
+            return UITableViewCell()
+        }
+
+        let item = items[indexPath.row]
+
+        cell.configure(with: item)
+
+        cell.onAcceptTapped = { [weak self] in
+            self?.accept(item: item)
+        }
+
+        cell.onRejectTapped = { [weak self] in
+            self?.reject(item: item)
+        }
 
         return cell
     }
-    
 }

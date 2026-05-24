@@ -147,4 +147,15 @@ extension UIView {
         view.clipsToBounds = true
         return view
     }
+    static func makeAvatarImageView(size: CGFloat) -> UIImageView {
+        let iv = UIImageView()
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.contentMode = .scaleAspectFill
+        iv.clipsToBounds = true
+        iv.layer.cornerRadius = size / 2
+        iv.backgroundColor = .systemGray5
+        iv.isUserInteractionEnabled = true
+        return iv
+
+    }
 }

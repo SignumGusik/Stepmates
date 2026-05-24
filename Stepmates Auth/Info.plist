@@ -2,15 +2,40 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Приложение использует данные о шагах, чтобы показывать вашу дневную активность.</string>
-	<key>UIAppFonts</key>
-	<array>
-		<string>malgun-font.ttf</string>
-		<string>malgunbd.ttf</string>
-		<string>Manrope-Medium.ttf</string>
-		<string>Manrope-Bold.ttf</string>
-		<string>Manrope-ExtraBold.ttf</string>
-	</array>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Stepmates использует геолокацию, чтобы показывать вас на карте, строить маршрут прогулки и отображать друзей рядом.</string>
+
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Stepmates использует геолокацию в фоне, чтобы продолжать записывать маршрут прогулки, когда приложение свернуто.</string>
+
+    <key>NSMotionUsageDescription</key>
+    <string>Stepmates использует данные о движении, чтобы точнее определять прогулку и не рисовать случайные скачки маршрута.</string>
+
+    <key>NSHealthShareUsageDescription</key>
+    <string>Stepmates использует данные о шагах, чтобы показывать вашу активность, прогресс цели и рейтинг за день.</string>
+
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Stepmates использует доступ к фото, чтобы вы могли выбрать аватарку профиля или группы.</string>
+
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>location</string>
+        <string>fetch</string>
+    </array>
+
+    <key>UIAppFonts</key>
+    <array>
+        <string>malgun-font.ttf</string>
+        <string>malgunbd.ttf</string>
+        <string>Manrope-Medium.ttf</string>
+        <string>Manrope-Bold.ttf</string>
+        <string>Manrope-ExtraBold.ttf</string>
+    </array>
 </dict>
 </plist>

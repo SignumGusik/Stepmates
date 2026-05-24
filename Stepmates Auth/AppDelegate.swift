@@ -6,29 +6,59 @@
 //
 
 import UIKit
+import YandexMapsMobile
+import CoreLocation
 
 @main
-
-
-
 class AppDelegate: UIResponder, UIApplicationDelegate {
     
     var appNavCoordinator: AppNavCoordinator!
     var window: UIWindow?
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    ) -> Bool {
+        
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
             return true
         }
-        // Override point for customization after application launch.
+        
+        setupYandexMapKit()
         
         window = UIWindow(frame: UIScreen.main.bounds)
-        appNavCoordinator = AppNavCoordinator(window: window!)
+        
+        guard let window else { return true }
+    
+        appNavCoordinator = AppNavCoordinator(window: window)
         appNavCoordinator.start()
         configureNavigationBar()
+        
+        let networkHandler = NetworkHandler()
+        let tokenStorage = AccessTokenStorage()
+        let mapService = MapService(networkHandler: networkHandler, tokenStorage: tokenStorage)
+
+        TrackingManager.shared.configure(mapService: mapService)
+        TrackingManager.shared.start()
+        
         return true
+    }
+    
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        TrackingManager.shared.flushPendingTrackPoints()
+    }
+
+    func applicationWillTerminate(_ application: UIApplication) {
+        TrackingManager.shared.flushPendingTrackPoints()
     }
 }
 
+private extension AppDelegate {
+    func setupYandexMapKit() {
+        YMKMapKit.setApiKey("49293477-49bb-4147-8be5-04e9ca5b077c")
+        YMKMapKit.sharedInstance()
+    }
+}
 
 extension AppDelegate {
     private func configureNavigationBar() {
@@ -49,6 +79,4 @@ extension AppDelegate {
         navBar.compactAppearance = appearance
         navBar.tintColor = .black
     }
-    
 }
-

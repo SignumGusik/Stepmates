@@ -14,6 +14,7 @@ enum Constants {
     static let blue: UIColor? = UIColor(hex: "#193499")
     static let lightPurple: UIColor? = UIColor(hex: "#DBE0F5")
     static let orange: UIColor? = UIColor(hex: "#FF6600")
+    static let grey: UIColor? = UIColor(hex: "#CECECE")
     
     static let manropeMedium: String = "Manrope-Medium"
     static let manropeBold: String = "Manrope-Bold"

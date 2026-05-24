@@ -14,6 +14,7 @@ struct AccessUsers: Codable {
     var isFriend: Bool
     var requestSent: Bool
     var requestReceived: Bool
+    var avatarUrl: String?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -24,5 +25,6 @@ struct AccessUsers: Codable {
         case isFriend = "is_friend"
         case requestSent = "request_sent"
         case requestReceived = "request_received"
+        case avatarUrl = "avatar_url"
     }
 }

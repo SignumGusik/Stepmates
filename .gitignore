@@ -1,0 +1,5 @@
+Pods/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+auth_backend/db.sqlite3

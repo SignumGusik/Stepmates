@@ -237,3 +237,116 @@ extension UIButton {
         return button
     }
 }
+import UIKit
+
+extension UIButton {
+
+    static func makeAvatarEditBadge(target: Any?, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.backgroundColor = .white
+        button.layer.cornerRadius = 14
+        button.clipsToBounds = true
+        let img = UIImage(systemName: "pencil")?.withRenderingMode(.alwaysTemplate)
+        button.setImage(img, for: .normal)
+        button.tintColor = .black
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.12
+        button.layer.shadowRadius = 6
+        button.layer.shadowOffset = CGSize(width: 0, height: 2)
+
+        button.addTarget(target, action: action, for: .touchUpInside)
+        button.setSize(width: 28, height: 28)
+        return button
+    }
+}
+
+extension UIButton {
+
+    static func makePeriodButton(
+        title: String,
+        target: Any?,
+        action: Selector
+    ) -> UIButton {
+
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(Constants.blue ?? .systemBlue, for: .normal)
+
+        button.titleLabel?.font = UIFont(
+            name: Constants.manropeBold,
+            size: 14
+        ) ?? .systemFont(ofSize: 14, weight: .semibold)
+
+        let image = UIImage(systemName: "chevron.down")?.withRenderingMode(.alwaysTemplate)
+        button.setImage(image, for: .normal)
+        button.tintColor = Constants.blue ?? .systemBlue
+
+        button.semanticContentAttribute = .forceRightToLeft
+        button.contentHorizontalAlignment = .right
+        button.imageEdgeInsets = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 0)
+
+        button.addTarget(target, action: action, for: .touchUpInside)
+        return button
+    }
+}
+extension UIButton {
+
+    static func makeDropdownItemButton(
+        title: String,
+        isSelected: Bool,
+        target: Any?,
+        action: Selector
+    ) -> UIButton {
+
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        button.setTitle(title, for: .normal)
+        button.contentHorizontalAlignment = .left
+        button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+
+        let titleColor = UIColor.black
+        button.setTitleColor(titleColor, for: .normal)
+
+        button.titleLabel?.font = UIFont(
+            name: isSelected ? Constants.manropeExtraBold : Constants.manropeBold,
+            size: 14
+        ) ?? .systemFont(ofSize: 14, weight: isSelected ? .bold : .semibold)
+
+        if isSelected {
+            button.backgroundColor = (Constants.blue ?? .systemBlue).withAlphaComponent(0.12)
+            button.layer.cornerRadius = 12
+        } else {
+            button.backgroundColor = .clear
+            button.layer.cornerRadius = 0
+        }
+
+        button.addTarget(target, action: action, for: .touchUpInside)
+        return button
+    }
+}
+
+extension UIButton {
+
+    static func makeNotificationImageButton(
+        imageName: String,
+        target: Any?,
+        action: Selector
+    ) -> UIButton {
+        let button = UIButton(type: .custom)
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        let image = UIImage(named: imageName)?.withRenderingMode(.alwaysOriginal)
+        button.setImage(image, for: .normal)
+        button.imageView?.contentMode = .scaleAspectFit
+
+        button.backgroundColor = .clear
+        button.clipsToBounds = false
+
+        button.addTarget(target, action: action, for: .touchUpInside)
+        return button
+    }
+}

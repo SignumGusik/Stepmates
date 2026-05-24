@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "stepmates_app_icon_1024_no_text.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

@@ -13,6 +13,8 @@ protocol HomeNavDelegate: AnyObject {
     func onFriendsTapped()
     func onNotificationsTapped()
     func onSettingsTapped(username: String)
+    func onMapTapped()
+    func onGroupsTapped()
 }
 
 class HomeViewController: UIViewController {
@@ -24,7 +26,7 @@ class HomeViewController: UIViewController {
     private lazy var logoutButton = UIButton.makeButton(title: "Logout", target: self, action: #selector(self.onLogoutTapped))
     private lazy var friendsButton = UIButton.makeHomeInfoButton(
         title: "Друзья",
-        subtitle: "9 друзей",
+        subtitle: "0 друзей",
         imageName: "friends",
         backgroundColor: Constants.purple ?? .systemBlue,
         target: self,
@@ -32,7 +34,7 @@ class HomeViewController: UIViewController {
     )
     private lazy var groupsButton = UIButton.makeHomeInfoButton(
         title: "Группы",
-        subtitle: "3 группы",
+        subtitle: "0 групп",
         imageName: "groups",
         backgroundColor: Constants.blue ?? .systemBlue,
         target: self,
@@ -64,6 +66,15 @@ class HomeViewController: UIViewController {
         target: self,
         action: #selector(onNotificationsTapped)
     )
+    private let notificationsDotView: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.backgroundColor = Constants.orange ?? .orange
+        view.layer.cornerRadius = 5
+        view.clipsToBounds = true
+        view.isHidden = true
+        return view
+    }()
 
     private lazy var settingsButton = UIButton.makeRoundIconButton(
         imageName: "settings",
@@ -107,6 +118,11 @@ extension HomeViewController {
         setupObservers()
         setupHealthKit()
         setupAppStateObservers()
+        loadHomeCounters()
+    }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        loadHomeCounters()
     }
 }
 
@@ -138,6 +154,12 @@ private extension HomeViewController {
 
         settingsButton.setContentHuggingPriority(.required, for: .vertical)
         settingsButton.setContentCompressionResistancePriority(.required, for: .vertical)
+        
+        notificationsDotView
+            .addTo(notificationsButton)
+            .pinTop(toAnchor: notificationsButton.topAnchor, constant: 8)
+            .pinRight(toAnchor: notificationsButton.rightAnchor, constant: -8)
+            .setSize(width: 10, height: 10)
     
         
         planetButton
@@ -258,7 +280,12 @@ private extension HomeViewController {
 private extension HomeViewController {
     func setupHealthKit() {
         HealthKitManager.shared.requestAuthorization { [weak self] success in
-            guard success else { return }
+            guard success else {
+                print("HealthKit authorization failed")
+                return
+            }
+            
+            HealthKitManager.shared.enableBackgroundDelivery()
             
             self?.loadTodaySteps()
             
@@ -281,6 +308,90 @@ private extension HomeViewController {
                 await self.viewModel.syncTodaySteps(stepsInt)
             }
         }
+    }
+    
+    func loadHomeCounters() {
+        Task { [weak self] in
+            guard let self else { return }
+
+            let counters = await viewModel.loadHomeCounters()
+
+            await MainActor.run {
+                self.updateHomeCounters(counters)
+            }
+        }
+    }
+
+    func updateHomeCounters(_ counters: HomeCounters) {
+        updateHomeInfoButton(
+            friendsButton,
+            title: "Друзья",
+            subtitle: "\(counters.friendsCount) \(friendsWord(counters.friendsCount))"
+        )
+
+        updateHomeInfoButton(
+            groupsButton,
+            title: "Группы",
+            subtitle: "\(counters.groupsCount) \(groupsWord(counters.groupsCount))"
+        )
+
+        notificationsDotView.isHidden = counters.notificationsCount == 0
+    }
+
+    func updateHomeInfoButton(_ button: UIButton, title: String, subtitle: String) {
+        var config = button.configuration ?? UIButton.Configuration.plain()
+
+        let titleAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: Constants.manropeMedium, size: 18)
+                ?? UIFont.systemFont(ofSize: 18, weight: .medium),
+            .foregroundColor: UIColor.white
+        ]
+
+        let subtitleAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: Constants.manropeMedium, size: 14)
+                ?? UIFont.systemFont(ofSize: 14, weight: .medium),
+            .foregroundColor: UIColor.white
+        ]
+
+        config.attributedTitle = AttributedString(
+            NSAttributedString(string: title, attributes: titleAttributes)
+        )
+
+        config.attributedSubtitle = AttributedString(
+            NSAttributedString(string: subtitle, attributes: subtitleAttributes)
+        )
+
+        button.configuration = config
+    }
+
+    func friendsWord(_ count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+
+        if mod10 == 1 && mod100 != 11 {
+            return "друг"
+        }
+
+        if (2...4).contains(mod10) && !(12...14).contains(mod100) {
+            return "друга"
+        }
+
+        return "друзей"
+    }
+
+    func groupsWord(_ count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+
+        if mod10 == 1 && mod100 != 11 {
+            return "группа"
+        }
+
+        if (2...4).contains(mod10) && !(12...14).contains(mod100) {
+            return "группы"
+        }
+
+        return "групп"
     }
 }
 
@@ -310,13 +421,14 @@ private extension HomeViewController {
         navDelegate?.onFriendsTapped()
     }
     @objc func onNotificationsTapped() {
+        notificationsDotView.isHidden = true
         navDelegate?.onNotificationsTapped()
     }
-    @objc func onGroupsTapped() {
-        print("groups tapped")
+    @objc private func onGroupsTapped() {
+        navDelegate?.onGroupsTapped()
     }
     @objc private func onPlanetTapped() {
-        print("")
+        navDelegate?.onMapTapped()
     }
     @objc private func onSettingsTapped() {
         navDelegate?.onSettingsTapped(username: viewModel.username)
