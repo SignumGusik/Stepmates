@@ -64,18 +64,18 @@ extension HomeViewController.ViewModel {
         infoText = responseData.message
     }
     
-    func syncTodaySteps(_ steps: Int) async {
+    func syncTodaySteps(_ steps: Int) async -> SyncTodayStepsResponse? {
         let route = NetworkRoutes.syncTodaySteps
         let method = route.method
         
         guard let url = route.url,
               let accessToken = tokenStorage.get() else {
             print("No Url access token found")
-            return
+            return nil
         }
         
         do {
-            _ = try await networkHandler.request(
+            return try await networkHandler.request(
                 url,
                 jsonDictionary: ["steps": steps],
                 responseType: SyncTodayStepsResponse.self,
@@ -84,7 +84,46 @@ extension HomeViewController.ViewModel {
             )
         } catch {
             print("syncTodaySteps error: \(error)")
+            return nil
         }
+    }
+
+    func loadTodayStepsState() async -> SyncTodayStepsResponse? {
+        let route = NetworkRoutes.myTodaySteps
+
+        guard let url = route.url,
+              let accessToken = tokenStorage.get()?.accessToken else {
+            return nil
+        }
+
+        do {
+            return try await networkHandler.request(
+                url,
+                responseType: SyncTodayStepsResponse.self,
+                httpMethod: route.method.rawValue,
+                accessToken: accessToken
+            )
+        } catch {
+            print("loadTodayStepsState error: \(error)")
+            return nil
+        }
+    }
+
+    func updateDailyGoal(_ goal: Int) async throws -> DailyGoalResponse {
+        let route = NetworkRoutes.updateDailyGoal
+
+        guard let url = route.url,
+              let accessToken = tokenStorage.get()?.accessToken else {
+            throw ConfigurationError.nilObject
+        }
+
+        return try await networkHandler.request(
+            url,
+            jsonDictionary: ["daily_goal_steps": goal],
+            responseType: DailyGoalResponse.self,
+            httpMethod: route.method.rawValue,
+            accessToken: accessToken
+        )
     }
     
     func loadHomeCounters() async -> HomeCounters {

@@ -33,6 +33,8 @@ final class TrackingManager: NSObject {
     
     private var pendingTrackPoints: [TrackPointPayload] = []
     private var lastTrackUploadAt: Date?
+    private var isUploadingTrackPoints = false
+    private let maxTrackUploadBatchSize = 80
     private let isoFormatter = ISO8601DateFormatter()
     
     private(set) var currentLocation: CLLocation?
@@ -217,6 +219,7 @@ final class TrackingManager: NSObject {
     private func uploadTrackPointsIfNeeded(force: Bool = false) {
         guard let mapService else { return }
         guard !pendingTrackPoints.isEmpty else { return }
+        guard !isUploadingTrackPoints else { return }
         
         let now = Date()
         let shouldUploadByCount = pendingTrackPoints.count >= 5
@@ -230,20 +233,30 @@ final class TrackingManager: NSObject {
         
         guard force || shouldUploadByCount || shouldUploadByTime else { return }
         
-        let batch = pendingTrackPoints
-        pendingTrackPoints.removeAll()
+        let batch = Array(pendingTrackPoints.prefix(maxTrackUploadBatchSize))
+        pendingTrackPoints.removeFirst(batch.count)
         TrackPointDiskStore.shared.save(pendingTrackPoints)
         lastTrackUploadAt = now
+        isUploadingTrackPoints = true
         
         Task {
             do {
                 try await mapService.uploadTrackPoints(batch)
+
+                await MainActor.run {
+                    self.isUploadingTrackPoints = false
+
+                    if self.pendingTrackPoints.count >= 5 {
+                        self.uploadTrackPointsIfNeeded(force: false)
+                    }
+                }
             } catch {
                 print("Track points upload error:", error.localizedDescription)
                 
                 await MainActor.run {
                     self.pendingTrackPoints.insert(contentsOf: batch, at: 0)
                     TrackPointDiskStore.shared.save(self.pendingTrackPoints)
+                    self.isUploadingTrackPoints = false
                 }
             }
         }

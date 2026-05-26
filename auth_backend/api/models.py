@@ -208,6 +208,7 @@ class DailySteps(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="daily_steps")
     date = models.DateField()
     steps = models.PositiveIntegerField(default=0)
+    goal_steps = models.PositiveIntegerField(default=10000)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -249,6 +250,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     avatar = models.ImageField(upload_to=user_avatar_upload_to, null=True, blank=True)
     avatar_updated_at = models.DateTimeField(null=True, blank=True)
+    daily_goal_steps = models.PositiveIntegerField(default=10000)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -334,6 +336,12 @@ class UserTrackPoint(models.Model):
 
     class Meta:
         ordering = ["recorded_at"]
+        indexes = [
+            models.Index(
+                fields=["user", "day", "recorded_at"],
+                name="api_tp_user_day_rec_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user_id} {self.recorded_at} ({self.latitude}, {self.longitude})"
@@ -384,6 +392,16 @@ class MatchedTrackSegment(models.Model):
 
     class Meta:
         ordering = ["started_at"]
+        indexes = [
+            models.Index(
+                fields=["user", "day", "started_at"],
+                name="api_mts_user_day_start_idx",
+            ),
+            models.Index(
+                fields=["user", "day", "ended_at"],
+                name="api_mts_user_day_end_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user_id} {self.day} {self.status} {self.started_at} - {self.ended_at}"

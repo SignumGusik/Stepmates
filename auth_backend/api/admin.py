@@ -20,6 +20,6 @@ class GroupMembershipAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "avatar", "avatar_updated_at", "created_at", "updated_at")
+    list_display = ("id", "user", "daily_goal_steps", "avatar", "avatar_updated_at", "created_at", "updated_at")
     search_fields = ("user__username", "user__email")
     readonly_fields = ("created_at", "updated_at", "avatar_updated_at")

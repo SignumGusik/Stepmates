@@ -54,12 +54,71 @@ class HomeViewController: UIViewController {
     private lazy var todayLabel = UILabel.makeManrope(text: "Сегодня:", style: Constants.manropeMedium, size: 16)
     private lazy var stepsLabel = UILabel.makeManrope(text: "0 шагов", style: Constants.manropeBold, size: 40, color: Constants.blue ?? .systemBlue)
     private lazy var goalLabel = UILabel.makeManrope(text: "Цель: 10 000", style: Constants.manropeExtraBold, size: 20, color: Constants.orange ?? .orange)
+    private let goalRowView = UIView()
+    private lazy var editGoalButton = UIButton.makeImageButton(
+        imageName: "editGroupPageBtn",
+        target: self,
+        action: #selector(onGoalEditTapped)
+    )
 
     private let progressBar = GoalProgressView()
     private let statsCard = UIView()
     
     private var steps: CGFloat = 0
-    private let goal: CGFloat = 10000
+    private var dailyGoal = 10000
+    private var goal: CGFloat {
+        CGFloat(dailyGoal)
+    }
+
+    private let goalOverlayView = UIView()
+    private let goalBlurView = UIVisualEffectView(effect: nil)
+    private let goalBlurEffect = UIBlurEffect(style: .systemUltraThinMaterialLight)
+    private let goalDimView = UIView()
+    private let goalEditorCardView = UIView()
+    private lazy var goalEditorCloseButton = UIButton.makeImageButton(
+        imageName: "cancelBtn",
+        target: self,
+        action: #selector(onGoalEditorCloseTapped)
+    )
+    private lazy var goalEditorTitleLabel = UILabel.makeManrope(
+        text: "Введите цель",
+        style: Constants.manropeExtraBold,
+        size: 20,
+        color: Constants.blue ?? .systemBlue
+    )
+    private lazy var goalEditorTextField: UITextField = {
+        let field = UITextField()
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.backgroundColor = Constants.lightPurple
+        field.layer.cornerRadius = 18
+        field.clipsToBounds = true
+        field.keyboardType = .numberPad
+        field.textAlignment = .center
+        field.textColor = Constants.blue ?? .systemBlue
+        field.font = UIFont(name: Constants.manropeExtraBold, size: 28)
+            ?? .systemFont(ofSize: 28, weight: .heavy)
+        field.addTarget(self, action: #selector(onGoalTextChanged), for: .editingChanged)
+        return field
+    }()
+    private lazy var goalEditorHintLabel = UILabel.makeManrope(
+        text: "От 1 000 до 100 000 шагов",
+        style: Constants.manropeMedium,
+        size: 12,
+        color: UIColor.black.withAlphaComponent(0.45)
+    )
+    private lazy var goalEditorSaveButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Сохранить", for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = UIFont(name: Constants.manropeExtraBold, size: 16)
+            ?? .systemFont(ofSize: 16, weight: .heavy)
+        button.backgroundColor = Constants.orange ?? .orange
+        button.layer.cornerRadius = 22
+        button.clipsToBounds = true
+        button.addTarget(self, action: #selector(onGoalSaveTapped), for: .touchUpInside)
+        return button
+    }()
     
     private lazy var notificationsButton = UIButton.makeRoundIconButton(
         imageName: "notifications",
@@ -88,7 +147,12 @@ class HomeViewController: UIViewController {
     
     private var concellables = Set<AnyCancellable>()
     private var observers: [NSObjectProtocol] = []
-    private var isHealthKitReady = false
+    private var goalRowHeightConstraint: NSLayoutConstraint?
+    private var isStepCountingReady = false
+    private var isHealthAccessActionEnabled = false
+    private var isHomeVisible = false
+    private var lastSyncedSteps: Int?
+    private var lastStepsSyncAt: Date?
     
     weak var navDelegate: HomeNavDelegate?
     private let viewModel: ViewModel
@@ -102,9 +166,9 @@ class HomeViewController: UIViewController {
     }
     
     deinit {
-            observers.forEach { NotificationCenter.default.removeObserver($0) }
-            HealthKitManager.shared.stopObservingSteps()
-        }
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        StepCountProvider.shared.stop()
+    }
     
 }
 
@@ -115,18 +179,25 @@ extension HomeViewController {
         super.viewDidLoad()
         navigationItem.backButtonDisplayMode = .minimal
         setupViews()
+        setupGoalEditor()
         setupNavBar()
         setupObservers()
-        setupHealthKit()
         setupAppStateObservers()
         loadHomeCounters()
+        loadTodayStepsState()
     }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        isHomeVisible = true
         loadHomeCounters()
-        if isHealthKitReady {
-            loadTodaySteps()
-        }
+        loadTodayStepsState()
+        setupStepCounting()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isHomeVisible = false
+        StepCountProvider.shared.stop()
     }
 }
 
@@ -198,17 +269,41 @@ private extension HomeViewController {
         stepsLabel.adjustsFontSizeToFitWidth = true
         stepsLabel.minimumScaleFactor = 0.72
 
-        goalLabel
+        goalRowView
             .addTo(statsCard)
             .pinTop(toAnchor: stepsLabel.bottomAnchor, constant: 6)
             .pinLeft(toAnchor: statsCard.leftAnchor, constant: 20)
             .pinRight(toAnchor: statsCard.rightAnchor, constant: -20)
+        goalRowHeightConstraint = goalRowView.heightAnchor.constraint(equalToConstant: 28)
+        goalRowHeightConstraint?.isActive = true
+
+        editGoalButton
+            .addTo(goalRowView)
+            .pinRight(toAnchor: goalRowView.rightAnchor, constant: 0)
+            .centerYOn(goalRowView)
+            .setSize(width: 22, height: 22)
+        editGoalButton.accessibilityLabel = "Редактировать цель"
+
+        goalLabel
+            .addTo(goalRowView)
+            .pinLeft(toAnchor: goalRowView.leftAnchor, constant: 0)
+            .centerYOn(goalRowView)
+            .pinRight(toAnchor: editGoalButton.leftAnchor, constant: -6)
         goalLabel.numberOfLines = 2
+        goalLabel.isUserInteractionEnabled = true
+        goalLabel.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(onStepsPermissionTapped))
+        )
+
+        stepsLabel.isUserInteractionEnabled = true
+        stepsLabel.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(onStepsPermissionTapped))
+        )
 
         // прогресс бар
         progressBar
             .addTo(statsCard)
-            .pinTop(toAnchor: goalLabel.bottomAnchor, constant: 10)
+            .pinTop(toAnchor: goalRowView.bottomAnchor, constant: 10)
             .pinLeft(toAnchor: statsCard.leftAnchor, constant: 20)
             .pinRight(toAnchor: statsCard.rightAnchor, constant: -16)
             .setHeight(8)
@@ -223,6 +318,114 @@ private extension HomeViewController {
             .pinRight(toAnchor: statsCard.rightAnchor, constant: -10)
             .setHeight(90)
         
+    }
+
+    func setupGoalEditor() {
+        goalOverlayView.translatesAutoresizingMaskIntoConstraints = false
+        goalOverlayView.isHidden = true
+        goalOverlayView.alpha = 0
+
+        goalOverlayView
+            .addTo(view)
+            .pinTop(toAnchor: view.topAnchor, constant: 0)
+            .pinLeft(toAnchor: view.leftAnchor, constant: 0)
+            .pinRight(toAnchor: view.rightAnchor, constant: 0)
+            .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
+
+        goalBlurView.translatesAutoresizingMaskIntoConstraints = false
+        goalBlurView
+            .addTo(goalOverlayView)
+            .pinTop(toAnchor: goalOverlayView.topAnchor, constant: 0)
+            .pinLeft(toAnchor: goalOverlayView.leftAnchor, constant: 0)
+            .pinRight(toAnchor: goalOverlayView.rightAnchor, constant: 0)
+            .pinBottom(toAnchor: goalOverlayView.bottomAnchor, constant: 0)
+
+        goalDimView.translatesAutoresizingMaskIntoConstraints = false
+        goalDimView.backgroundColor = UIColor.black.withAlphaComponent(0.10)
+        goalDimView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(onGoalEditorCloseTapped)))
+
+        goalDimView
+            .addTo(goalOverlayView)
+            .pinTop(toAnchor: goalOverlayView.topAnchor, constant: 0)
+            .pinLeft(toAnchor: goalOverlayView.leftAnchor, constant: 0)
+            .pinRight(toAnchor: goalOverlayView.rightAnchor, constant: 0)
+            .pinBottom(toAnchor: goalOverlayView.bottomAnchor, constant: 0)
+
+        goalEditorCardView.translatesAutoresizingMaskIntoConstraints = false
+        goalEditorCardView.backgroundColor = .white
+        goalEditorCardView.layer.cornerRadius = 22
+        goalEditorCardView.layer.borderWidth = 2
+        goalEditorCardView.layer.borderColor = (Constants.blue ?? .systemBlue).cgColor
+        goalEditorCardView.layer.shadowColor = UIColor.black.cgColor
+        goalEditorCardView.layer.shadowOpacity = 0.14
+        goalEditorCardView.layer.shadowRadius = 18
+        goalEditorCardView.layer.shadowOffset = CGSize(width: 0, height: 10)
+
+        goalEditorCardView
+            .addTo(goalOverlayView)
+            .centerXOn(goalOverlayView)
+            .centerYOn(goalOverlayView)
+            .setWidth(320)
+            .setHeight(270)
+
+        goalEditorCloseButton
+            .addTo(goalEditorCardView)
+            .pinTop(toAnchor: goalEditorCardView.topAnchor, constant: 14)
+            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -14)
+            .setSize(width: 24, height: 24)
+
+        goalEditorTitleLabel
+            .addTo(goalEditorCardView)
+            .pinTop(toAnchor: goalEditorCardView.topAnchor, constant: 20)
+            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
+            .pinRight(toAnchor: goalEditorCloseButton.leftAnchor, constant: -10)
+
+        goalEditorTextField
+            .addTo(goalEditorCardView)
+            .pinTop(toAnchor: goalEditorTitleLabel.bottomAnchor, constant: 18)
+            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
+            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -22)
+            .setHeight(58)
+
+        goalEditorHintLabel
+            .addTo(goalEditorCardView)
+            .pinTop(toAnchor: goalEditorTextField.bottomAnchor, constant: 8)
+            .centerXOn(goalEditorCardView)
+
+        let quickStack = UIStackView()
+        quickStack.translatesAutoresizingMaskIntoConstraints = false
+        quickStack.axis = .horizontal
+        quickStack.spacing = 8
+        quickStack.distribution = .fillEqually
+
+        for value in [8000, 10000, 12000] {
+            let button = UIButton(type: .system)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.tag = value
+            button.setTitle(formatSteps(value), for: .normal)
+            button.setTitleColor(Constants.blue ?? .systemBlue, for: .normal)
+            button.titleLabel?.font = UIFont(name: Constants.manropeExtraBold, size: 13)
+                ?? .systemFont(ofSize: 13, weight: .heavy)
+            button.backgroundColor = Constants.lightPurple
+            button.layer.cornerRadius = 12
+            button.clipsToBounds = true
+            button.addTarget(self, action: #selector(onQuickGoalTapped(_:)), for: .touchUpInside)
+            quickStack.addArrangedSubview(button)
+        }
+
+        quickStack
+            .addTo(goalEditorCardView)
+            .pinTop(toAnchor: goalEditorHintLabel.bottomAnchor, constant: 16)
+            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
+            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -22)
+            .setHeight(36)
+
+        goalEditorSaveButton
+            .addTo(goalEditorCardView)
+            .pinTop(toAnchor: quickStack.bottomAnchor, constant: 18)
+            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
+            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -22)
+            .setHeight(46)
     }
     
     private func setupNavBar() {
@@ -278,83 +481,291 @@ private extension HomeViewController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.loadHomeCounters()
-            self?.loadTodaySteps()
+            guard let self, self.isHomeVisible else {
+                return
+            }
+
+            self.loadHomeCounters()
+            self.loadTodayStepsState()
+            self.setupStepCounting()
         }
         
         observers.append(observer)
+
+        let backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.isHomeVisible else {
+                return
+            }
+
+            self.isStepCountingReady = false
+            StepCountProvider.shared.stop()
+        }
+
+        observers.append(backgroundObserver)
     }
     
 }
 
 private extension HomeViewController {
-    func setupHealthKit() {
-        guard HealthKitManager.shared.isHealthDataAvailable() else {
-            isHealthKitReady = false
-            showStepsUnavailableState(message: "Шаги недоступны на этом устройстве")
-            return
-        }
+    func setupStepCounting() {
+        startStepCounting(showHelpIfUnavailable: false)
+    }
 
-        showStepsLoadingState()
+    func startStepCounting(showHelpIfUnavailable: Bool) {
+        isStepCountingReady = false
+        showStepsDefaultState()
 
-        HealthKitManager.shared.requestAuthorization { [weak self] success in
-            guard success else {
-                print("HealthKit authorization failed")
-                self?.isHealthKitReady = false
-                self?.showStepsUnavailableState(message: "Разрешите доступ к шагам в Здоровье")
-                return
-            }
+        StepCountProvider.shared.start { [weak self] snapshot in
+            self?.applyStepSnapshot(snapshot)
+        } onUnavailable: { [weak self] message in
+            guard let self else { return }
 
-            self?.isHealthKitReady = true
-            
-            HealthKitManager.shared.enableBackgroundDelivery()
-            
-            self?.loadTodaySteps()
-            
-            HealthKitManager.shared.startObservingSteps { [weak self] in
-                self?.loadTodaySteps()
+            self.isStepCountingReady = false
+            self.showStepsUnavailableState(message: "Нажмите, чтобы настроить шаги")
+
+            if showHelpIfUnavailable {
+                self.showStepsHelpAlert(message: message)
             }
         }
     }
     
     func loadTodaySteps() {
-        guard isHealthKitReady else {
+        guard isStepCountingReady else {
             return
         }
 
-        guard HealthKitManager.shared.isHealthDataAvailable() else {
-            isHealthKitReady = false
-            showStepsUnavailableState(message: "Шаги недоступны на этом устройстве")
-            return
-        }
-
-        HealthKitManager.shared.fetchTodaySteps { [weak self] stepsValue in
-            guard let self else { return }
-            
-            let stepsInt = Int(stepsValue)
-            self.steps = CGFloat(stepsValue)
-            self.stepsLabel.text = "\(stepsInt) шагов"
-            self.goalLabel.text = "Цель: 10 000"
-            self.progressBar.setProgress(min(CGFloat(stepsValue) / self.goal, 1), animated: true)
-            
-            Task {
-                await self.viewModel.syncTodaySteps(stepsInt)
-            }
-        }
+        StepCountProvider.shared.refresh()
     }
 
-    func showStepsLoadingState() {
-        steps = 0
-        stepsLabel.text = "0 шагов"
-        goalLabel.text = "Шаги загружаются"
-        progressBar.setProgress(0, animated: false)
+    func applyStepSnapshot(_ snapshot: StepCountSnapshot) {
+        isStepCountingReady = true
+        isHealthAccessActionEnabled = false
+
+        let stepsValue = CGFloat(snapshot.steps)
+        steps = stepsValue
+        stepsLabel.text = "\(snapshot.steps) шагов"
+        setGoalText(goalText(), isAction: false)
+        progressBar.setProgress(min(stepsValue / goal, 1), animated: true)
+
+        syncStepsIfNeeded(snapshot.steps)
+    }
+
+    func showStepsDefaultState() {
+        isHealthAccessActionEnabled = false
+        setGoalText(goalText(), isAction: false)
+        updateProgress()
     }
 
     func showStepsUnavailableState(message: String) {
         steps = 0
         stepsLabel.text = "0 шагов"
-        goalLabel.text = message
+        isHealthAccessActionEnabled = true
+        setGoalText(message, isAction: true)
         progressBar.setProgress(0, animated: true)
+    }
+
+    func syncStepsIfNeeded(_ steps: Int) {
+        let now = Date()
+
+        if let lastSyncedSteps,
+           lastSyncedSteps == steps {
+            return
+        }
+
+        if let lastSyncedSteps,
+           let lastStepsSyncAt,
+           now.timeIntervalSince(lastStepsSyncAt) < 60,
+           abs(steps - lastSyncedSteps) < 25 {
+            return
+        }
+
+        lastSyncedSteps = steps
+        lastStepsSyncAt = now
+
+        Task {
+            let response = await viewModel.syncTodaySteps(steps)
+            guard let goalSteps = response?.goalSteps else { return }
+
+            await MainActor.run {
+                self.applyDailyGoal(goalSteps, animated: true)
+            }
+        }
+    }
+
+    func setGoalText(_ text: String, isAction: Bool) {
+        let font = UIFont(name: Constants.manropeExtraBold, size: 20)
+            ?? UIFont.systemFont(ofSize: 20, weight: .heavy)
+        let color = Constants.orange ?? .orange
+        let attributedText = NSMutableAttributedString(
+            string: text,
+            attributes: [
+                .font: font,
+                .foregroundColor: color
+            ]
+        )
+
+        if isAction {
+            attributedText.addAttribute(
+                .underlineStyle,
+                value: NSUnderlineStyle.single.rawValue,
+                range: NSRange(location: 0, length: attributedText.length)
+            )
+        }
+
+        goalLabel.attributedText = attributedText
+        editGoalButton.isHidden = isAction
+        goalRowHeightConstraint?.constant = isAction ? 48 : 28
+    }
+
+    func goalText() -> String {
+        "Цель: \(formatSteps(dailyGoal))"
+    }
+
+    func updateProgress(animated: Bool = true) {
+        progressBar.setProgress(min(steps / goal, 1), animated: animated)
+    }
+
+    func applyDailyGoal(_ goal: Int, animated: Bool) {
+        dailyGoal = max(1000, min(100000, goal))
+        guard isHealthAccessActionEnabled == false else {
+            return
+        }
+
+        setGoalText(goalText(), isAction: false)
+        updateProgress(animated: animated)
+    }
+
+    func loadTodayStepsState() {
+        Task { [weak self] in
+            guard let self else { return }
+            let state = await viewModel.loadTodayStepsState()
+
+            await MainActor.run {
+                if let goalSteps = state?.goalSteps {
+                    self.applyDailyGoal(goalSteps, animated: false)
+                }
+
+                if let todaySteps = state?.steps, todaySteps > Int(self.steps) {
+                    self.steps = CGFloat(todaySteps)
+                    self.stepsLabel.text = "\(todaySteps) шагов"
+                    self.updateProgress(animated: false)
+                }
+            }
+        }
+    }
+
+    func formatSteps(_ value: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.locale = Locale(identifier: "ru_RU")
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    func showStepsHelpAlert(message: String) {
+        let alert = UIAlertController(
+            title: "Доступ к шагам",
+            message: message,
+            preferredStyle: .alert
+        )
+
+        alert.addAction(UIAlertAction(title: "Попробовать ещё раз", style: .default) { [weak self] _ in
+            self?.startStepCounting(showHelpIfUnavailable: false)
+        })
+
+        alert.addAction(UIAlertAction(title: "Открыть настройки", style: .default) { [weak self] _ in
+            self?.openAppSettings()
+        })
+
+        alert.addAction(UIAlertAction(title: "Понятно", style: .cancel))
+
+        present(alert, animated: true)
+    }
+
+    func openAppSettings() {
+        guard let settingsURL = URL(string: UIApplication.openSettingsURLString),
+              UIApplication.shared.canOpenURL(settingsURL) else {
+            return
+        }
+
+        UIApplication.shared.open(settingsURL)
+    }
+
+    func showGoalEditor() {
+        goalEditorTextField.text = "\(dailyGoal)"
+        goalEditorHintLabel.text = "От 1 000 до 100 000 шагов"
+        goalEditorHintLabel.textColor = UIColor.black.withAlphaComponent(0.45)
+        goalEditorSaveButton.isEnabled = true
+        goalEditorSaveButton.alpha = 1
+        goalEditorSaveButton.setTitle("Сохранить", for: .normal)
+
+        goalOverlayView.isHidden = false
+        view.bringSubviewToFront(goalOverlayView)
+        goalOverlayView.alpha = 0
+        goalBlurView.effect = nil
+        goalEditorCardView.alpha = 0
+        goalEditorCardView.transform = CGAffineTransform(translationX: 0, y: 22)
+            .scaledBy(x: 0.96, y: 0.96)
+
+        UIView.animate(withDuration: 0.24, delay: 0, options: [.curveEaseOut]) {
+            self.goalOverlayView.alpha = 1
+            self.goalBlurView.effect = self.goalBlurEffect
+        }
+
+        UIView.animate(
+            withDuration: 0.42,
+            delay: 0,
+            usingSpringWithDamping: 0.78,
+            initialSpringVelocity: 0.65,
+            options: [.curveEaseOut]
+        ) {
+            self.goalEditorCardView.alpha = 1
+            self.goalEditorCardView.transform = .identity
+        } completion: { _ in
+            self.goalEditorTextField.becomeFirstResponder()
+        }
+    }
+
+    func hideGoalEditor() {
+        view.endEditing(true)
+
+        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseIn]) {
+            self.goalOverlayView.alpha = 0
+            self.goalBlurView.effect = nil
+            self.goalEditorCardView.alpha = 0
+            self.goalEditorCardView.transform = CGAffineTransform(scaleX: 0.98, y: 0.98)
+        } completion: { _ in
+            self.goalOverlayView.isHidden = true
+            self.goalEditorCardView.transform = .identity
+        }
+    }
+
+    func parsedGoalInput() -> Int? {
+        let digits = (goalEditorTextField.text ?? "").filter { $0.isNumber }
+        guard let value = Int(digits),
+              (1000...100000).contains(value) else {
+            return nil
+        }
+
+        return value
+    }
+
+    func validateGoalInput() {
+        let isValid = parsedGoalInput() != nil
+        goalEditorSaveButton.isEnabled = isValid
+        goalEditorSaveButton.alpha = isValid ? 1 : 0.55
+
+        if isValid {
+            goalEditorHintLabel.text = "От 1 000 до 100 000 шагов"
+            goalEditorHintLabel.textColor = UIColor.black.withAlphaComponent(0.45)
+        } else {
+            goalEditorHintLabel.text = "Введите число от 1 000 до 100 000"
+            goalEditorHintLabel.textColor = Constants.orange ?? .orange
+        }
     }
     
     func loadHomeCounters() {
@@ -469,6 +880,64 @@ private extension HomeViewController {
     }
     @objc func onNotificationsTapped() {
         navDelegate?.onNotificationsTapped()
+    }
+    @objc func onStepsPermissionTapped() {
+        guard isHealthAccessActionEnabled else {
+            return
+        }
+
+        startStepCounting(showHelpIfUnavailable: true)
+    }
+    @objc func onGoalEditTapped() {
+        showGoalEditor()
+    }
+    @objc func onGoalEditorCloseTapped() {
+        hideGoalEditor()
+    }
+    @objc func onGoalTextChanged() {
+        validateGoalInput()
+    }
+    @objc func onQuickGoalTapped(_ sender: UIButton) {
+        goalEditorTextField.text = "\(sender.tag)"
+        validateGoalInput()
+    }
+    @objc func onGoalSaveTapped() {
+        guard let goal = parsedGoalInput() else {
+            validateGoalInput()
+            return
+        }
+
+        goalEditorSaveButton.isEnabled = false
+        goalEditorSaveButton.alpha = 0.7
+        goalEditorSaveButton.setTitle("Сохраняем...", for: .normal)
+
+        Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let response = try await viewModel.updateDailyGoal(goal)
+
+                await MainActor.run {
+                    self.applyDailyGoal(response.dailyGoalSteps, animated: true)
+
+                    if let todaySteps = response.todaySteps {
+                        self.steps = CGFloat(todaySteps)
+                        self.stepsLabel.text = "\(todaySteps) шагов"
+                        self.updateProgress(animated: true)
+                    }
+
+                    self.hideGoalEditor()
+                }
+            } catch {
+                await MainActor.run {
+                    self.goalEditorSaveButton.isEnabled = true
+                    self.goalEditorSaveButton.alpha = 1
+                    self.goalEditorSaveButton.setTitle("Сохранить", for: .normal)
+                    self.goalEditorHintLabel.text = "Не удалось сохранить цель"
+                    self.goalEditorHintLabel.textColor = Constants.orange ?? .orange
+                }
+            }
+        }
     }
     @objc private func onGroupsTapped() {
         navDelegate?.onGroupsTapped()

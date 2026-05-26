@@ -34,4 +34,27 @@ struct SyncTodayStepsResponse: Decodable {
     let username: String?
     let date: String?
     let steps: Int?
+    let goalSteps: Int?
+    let isGoalCompleted: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case username
+        case date
+        case steps
+        case goalSteps = "goal_steps"
+        case isGoalCompleted = "is_goal_completed"
+    }
+}
+
+struct DailyGoalResponse: Decodable {
+    let dailyGoalSteps: Int
+    let todaySteps: Int?
+    let isGoalCompleted: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case dailyGoalSteps = "daily_goal_steps"
+        case todaySteps = "today_steps"
+        case isGoalCompleted = "is_goal_completed"
+    }
 }

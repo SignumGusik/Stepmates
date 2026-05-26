@@ -15,6 +15,7 @@ struct MyProfileDTO: Decodable {
     let lastName: String
     let avatarUrl: String?
 
+    let dailyGoalSteps: Int?
     let currentStreakDays: Int
     let totalSteps: Int
     let friendsCount: Int
@@ -28,6 +29,7 @@ struct MyProfileDTO: Decodable {
         case firstName = "first_name"
         case lastName = "last_name"
         case avatarUrl = "avatar_url"
+        case dailyGoalSteps = "daily_goal_steps"
         case currentStreakDays = "current_streak_days"
         case totalSteps = "total_steps"
         case friendsCount = "friends_count"

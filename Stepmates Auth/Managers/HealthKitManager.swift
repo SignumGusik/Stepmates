@@ -21,11 +21,11 @@ final class HealthKitManager {
             && HKObjectType.quantityType(forIdentifier: .stepCount) != nil
     }
     
-    func requestAuthorization(completion: @escaping (Bool) -> Void) {
+    func requestAuthorization(completion: @escaping (Bool, Error?) -> Void) {
         guard isHealthDataAvailable(),
               let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
             print("HealthKit is not available or step type is nil")
-            completion(false)
+            completion(false, nil)
             return
         }
         
@@ -35,7 +35,7 @@ final class HealthKitManager {
             }
             
             DispatchQueue.main.async {
-                completion(success)
+                completion(success, error)
             }
         }
     }
@@ -92,6 +92,11 @@ final class HealthKitManager {
     func startObservingSteps(onUpdate: @escaping () -> Void) {
         guard let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
             return
+        }
+
+        if let observerQuery {
+            healthStore.stop(observerQuery)
+            self.observerQuery = nil
         }
         
         observerQuery = HKObserverQuery(sampleType: stepType, predicate: nil) { _, completionHandler, error in

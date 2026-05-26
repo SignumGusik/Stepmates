@@ -36,6 +36,7 @@ path("password-reset/verify/", views.PasswordResetVerifyApi.as_view(), name="pas
     path("friends/leaderboard/", views.FriendsLeaderboardApi.as_view(), name="friends_leaderboard"),
 
     path("steps/sync/", views.DailyStepsSyncApi.as_view(), name="steps_sync"),
+    path("steps/goal/", views.DailyGoalApi.as_view(), name="steps_goal"),
     path("steps/me/today/", views.MyTodayStepsApi.as_view(), name="my_today_steps"),
 
     path("groups/", views.GroupsAPI.as_view(), name="groups"),
@@ -84,4 +85,3 @@ path("password-reset/verify/", views.PasswordResetVerifyApi.as_view(), name="pas
     path("map/ranking/", views.MapFriendsRankingApi.as_view(), name="map-friends-ranking"),
     path("map/groups/<int:group_id>/ranking/", views.MapGroupRankingApi.as_view(), name="map-group-ranking"),
 ]
-

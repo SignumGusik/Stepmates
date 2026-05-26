@@ -335,10 +335,18 @@ class DailyStepsSyncSerializer(serializers.Serializer):
 
 class DailyStepsSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
+    is_goal_completed = serializers.SerializerMethodField()
 
     class Meta:
         model = DailySteps
-        fields = ["id", "username", "date", "steps", "updated_at"]
+        fields = ["id", "username", "date", "steps", "goal_steps", "is_goal_completed", "updated_at"]
+
+    def get_is_goal_completed(self, obj):
+        return obj.steps >= obj.goal_steps
+
+
+class DailyGoalSerializer(serializers.Serializer):
+    daily_goal_steps = serializers.IntegerField(min_value=1000, max_value=100000)
 
 
 class FriendLeaderboardSerializer(serializers.Serializer):
@@ -460,6 +468,7 @@ class AchievementSerializer(serializers.Serializer):
 
 class MyProfileSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
+    daily_goal_steps = serializers.SerializerMethodField()
     current_streak_days = serializers.IntegerField(read_only=True)
     total_steps = serializers.IntegerField(read_only=True)
     friends_count = serializers.IntegerField(read_only=True)
@@ -475,6 +484,7 @@ class MyProfileSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "avatar_url",
+            "daily_goal_steps",
             "current_streak_days",
             "total_steps",
             "friends_count",
@@ -491,6 +501,10 @@ class MyProfileSerializer(serializers.ModelSerializer):
 
         url = profile.avatar.url
         return request.build_absolute_uri(url) if request else url
+
+    def get_daily_goal_steps(self, obj):
+        profile = getattr(obj, "profile", None)
+        return profile.daily_goal_steps if profile else 10000
 
 class AvatarUploadSerializer(serializers.Serializer):
     avatar = serializers.ImageField(required=True)

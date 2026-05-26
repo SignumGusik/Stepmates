@@ -27,6 +27,8 @@ enum NetworkRoutes {
     case passwordResetVerify
     case passwordResetConfirm
     case syncTodaySteps
+    case myTodaySteps
+    case updateDailyGoal
     case friendsLeaderboard
     case registerVerify
     case registerResend
@@ -103,6 +105,10 @@ enum NetworkRoutes {
             path = NetworkRoutes.baseUrl + "api/password-reset/confirm/"
         case .syncTodaySteps:
             path = NetworkRoutes.baseUrl + "api/steps/sync/"
+        case .myTodaySteps:
+            path = NetworkRoutes.baseUrl + "api/steps/me/today/"
+        case .updateDailyGoal:
+            path = NetworkRoutes.baseUrl + "api/steps/goal/"
         case .friendsLeaderboard:
             path = NetworkRoutes.baseUrl + "api/friends/leaderboard/"
         case .registerVerify:
@@ -218,6 +224,10 @@ enum NetworkRoutes {
             return .post
         case .syncTodaySteps:
             return .post
+        case .myTodaySteps:
+            return .get
+        case .updateDailyGoal:
+            return .patch
         case .friendsLeaderboard:
             return .get
         case .registerVerify:

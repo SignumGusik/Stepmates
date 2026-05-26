@@ -1,4 +1,5 @@
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Max
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import EmailValidator
 from django.contrib.auth import get_user_model
@@ -50,6 +51,7 @@ from .serializers import (
     PasswordResetVerifySerializer,
     DailyStepsSyncSerializer,
     DailyStepsSerializer,
+    DailyGoalSerializer,
     FriendLeaderboardSerializer,
     RegisterVerifySerializer,
     RegisterResendSerializer,
@@ -90,6 +92,9 @@ BREAK_REASONS = {
 PRECISE_TIME_GAP_SECONDS = 35
 MAX_JUMP_DISTANCE_METERS = 120
 MAX_JUMP_SPEED_METERS_PER_SECOND = 4.5
+TRACK_POINTS_BULK_CREATE_BATCH_SIZE = 250
+MATCHED_SEGMENTS_BULK_CREATE_BATCH_SIZE = 100
+MATCHED_REBUILD_THROTTLE_SECONDS = 25
 
 
 def blank_to_none(value):
@@ -338,11 +343,8 @@ def public_track_point_dict(point):
     }
 
 
-def should_start_new_segment(prev, cur):
-    prev_data = raw_point_dict(prev)
-    cur_data = raw_point_dict(cur, prev_data)
-
-    dt = (cur.recorded_at - prev.recorded_at).total_seconds()
+def should_start_new_segment(prev_data, cur_data):
+    dt = (cur_data["recorded_at_dt"] - prev_data["recorded_at_dt"]).total_seconds()
     if dt <= 0 or dt > PRECISE_TIME_GAP_SECONDS:
         return True
 
@@ -356,23 +358,22 @@ def should_start_new_segment(prev, cur):
 
 
 def split_raw_segments(track_points):
-    if not track_points:
-        return []
-
     segments = []
-    current = [track_points[0]]
+    current = []
+    previous = None
 
-    for i in range(1, len(track_points)):
-        prev = track_points[i - 1]
-        cur = track_points[i]
+    for point in track_points:
+        current_point = raw_point_dict(point, previous)
 
-        if should_start_new_segment(prev, cur):
+        if previous is not None and should_start_new_segment(previous, current_point):
             if len(current) >= 2:
                 segments.append(current)
-            current = [cur]
+            current = [current_point]
+            previous = current_point
             continue
 
-        current.append(cur)
+        current.append(current_point)
+        previous = current_point
 
     if len(current) >= 2:
         segments.append(current)
@@ -396,26 +397,37 @@ def matched_segment_dict(segment):
 
 
 def rebuild_user_matched_segments(user, day):
-    raw_qs = UserTrackPoint.objects.filter(
-        user=user,
-        day=day
-    ).order_by("recorded_at")
+    raw_qs = (
+        UserTrackPoint.objects
+        .filter(user=user, day=day)
+        .only(
+            "latitude",
+            "longitude",
+            "horizontal_accuracy",
+            "speed",
+            "course",
+            "movement_state",
+            "movement_kind",
+            "break_reason",
+            "confidence_score",
+            "steps_delta",
+            "recorded_at",
+        )
+        .order_by("recorded_at")
+        .iterator(chunk_size=500)
+    )
 
-    MatchedTrackSegment.objects.filter(user=user, day=day).delete()
-
-    raw_segments = split_raw_segments(list(raw_qs))
-
+    matched_segments = []
+    raw_segments = split_raw_segments(raw_qs)
     for segment in raw_segments:
-        raw_points = []
-        previous = None
-        for p in segment:
-            point = raw_point_dict(p, previous)
-            raw_points.append({
+        raw_points = [
+            {
                 key: value
                 for key, value in point.items()
                 if key != "recorded_at_dt"
-            })
-            previous = point
+            }
+            for point in segment
+        ]
 
         signal_quality = classify_signal_quality(raw_points)
         confidence_score = int(sum(p["confidence_score"] for p in raw_points) / len(raw_points))
@@ -433,11 +445,11 @@ def rebuild_user_matched_segments(user, day):
         is_drawable_walk = movement_kind in ("walking", "unknown") and not break_reason and signal_quality != "poor"
         status_value = MatchedTrackSegment.STATUS_MATCHED if is_drawable_walk else MatchedTrackSegment.STATUS_FALLBACK
 
-        MatchedTrackSegment.objects.create(
-            user=user,
+        matched_segments.append(MatchedTrackSegment(
+            user_id=user.id,
             day=day,
-            started_at=segment[0].recorded_at,
-            ended_at=segment[-1].recorded_at,
+            started_at=segment[0]["recorded_at_dt"],
+            ended_at=segment[-1]["recorded_at_dt"],
             raw_points=raw_points,
             display_points=smooth_points(raw_points),
             movement_state=movement_state,
@@ -447,7 +459,60 @@ def rebuild_user_matched_segments(user, day):
             signal_quality=signal_quality,
             matching_confidence=matching_confidence_from_score(confidence_score),
             status=status_value,
-        )
+        ))
+
+    with transaction.atomic():
+        MatchedTrackSegment.objects.filter(user=user, day=day).delete()
+        if matched_segments:
+            MatchedTrackSegment.objects.bulk_create(
+                matched_segments,
+                batch_size=MATCHED_SEGMENTS_BULK_CREATE_BATCH_SIZE,
+            )
+
+    return len(matched_segments)
+
+
+def matched_rebuild_cache_key(user_id, day):
+    return f"matched-track-rebuild:{user_id}:{day.isoformat()}"
+
+
+def rebuild_user_matched_segments_throttled(user, day, force=False):
+    cache_key = matched_rebuild_cache_key(user.id, day)
+
+    if not force and not cache.add(cache_key, "1", timeout=MATCHED_REBUILD_THROTTLE_SECONDS):
+        return False
+
+    try:
+        rebuild_user_matched_segments(user, day)
+        cache.set(cache_key, "1", timeout=MATCHED_REBUILD_THROTTLE_SECONDS)
+        return True
+    except Exception:
+        cache.delete(cache_key)
+        raise
+
+
+def matched_segments_are_stale(user, day):
+    latest_raw_at = (
+        UserTrackPoint.objects
+        .filter(user=user, day=day)
+        .aggregate(value=Max("recorded_at"))
+        .get("value")
+    )
+
+    if latest_raw_at is None:
+        return False
+
+    latest_matched_at = (
+        MatchedTrackSegment.objects
+        .filter(user=user, day=day)
+        .aggregate(value=Max("ended_at"))
+        .get("value")
+    )
+
+    if latest_matched_at is None:
+        return True
+
+    return latest_matched_at < latest_raw_at
 
 
 class RegisterAppUser(GenericAPIView):
@@ -1172,15 +1237,56 @@ class DailyStepsSyncApi(GenericAPIView):
 
         date = serializer.validated_data.get("date", timezone.localdate())
         steps = serializer.validated_data["steps"]
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
         daily_steps, _ = DailySteps.objects.update_or_create(
             user=request.user,
             date=date,
-            defaults={"steps": steps},
+            defaults={
+                "steps": steps,
+                "goal_steps": profile.daily_goal_steps,
+            },
         )
 
         return Response(
             DailyStepsSerializer(daily_steps).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class DailyGoalApi(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DailyGoalSerializer
+
+    def patch(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        goal_steps = serializer.validated_data["daily_goal_steps"]
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        profile.daily_goal_steps = goal_steps
+        profile.save(update_fields=["daily_goal_steps", "updated_at"])
+
+        today = timezone.localdate()
+        daily_steps, _ = DailySteps.objects.get_or_create(
+            user=request.user,
+            date=today,
+            defaults={
+                "steps": 0,
+                "goal_steps": goal_steps,
+            },
+        )
+
+        if daily_steps.goal_steps != goal_steps:
+            daily_steps.goal_steps = goal_steps
+            daily_steps.save(update_fields=["goal_steps", "updated_at"])
+
+        return Response(
+            {
+                "daily_goal_steps": goal_steps,
+                "today_steps": daily_steps.steps,
+                "is_goal_completed": daily_steps.steps >= goal_steps,
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -1190,6 +1296,7 @@ class MyTodayStepsApi(APIView):
 
     def get(self, request):
         today = timezone.localdate()
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
         daily_steps = DailySteps.objects.filter(
             user=request.user,
             date=today
@@ -1197,9 +1304,18 @@ class MyTodayStepsApi(APIView):
 
         if daily_steps is None:
             return Response(
-                {"date": today, "steps": 0},
+                {
+                    "date": today,
+                    "steps": 0,
+                    "goal_steps": profile.daily_goal_steps,
+                    "is_goal_completed": False,
+                },
                 status=status.HTTP_200_OK,
             )
+
+        if daily_steps.goal_steps != profile.daily_goal_steps:
+            daily_steps.goal_steps = profile.daily_goal_steps
+            daily_steps.save(update_fields=["goal_steps", "updated_at"])
 
         return Response(
             DailyStepsSerializer(daily_steps).data,
@@ -1379,16 +1495,20 @@ class MyProfileApi(APIView):
     def _current_streak_days(self, user):
         today = timezone.localdate()
 
-        active_dates = set(
-            DailySteps.objects
-            .filter(user=user, steps__gt=0)
-            .values_list("date", flat=True)
+        completed_dates = set(
+            row["date"]
+            for row in (
+                DailySteps.objects
+                .filter(user=user)
+                .values("date", "steps", "goal_steps")
+            )
+            if row["steps"] >= row["goal_steps"]
         )
 
         streak = 0
-        current_day = today
+        current_day = today if today in completed_dates else today - timedelta(days=1)
 
-        while current_day in active_dates:
+        while current_day in completed_dates:
             streak += 1
             current_day -= timedelta(days=1)
 
@@ -1732,7 +1852,7 @@ class MyTrackPointsApi(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        created = 0
+        track_points = []
         affected_days = set()
         for item in serializer.validated_data["points"]:
             recorded_at = item["recorded_at"]
@@ -1742,8 +1862,8 @@ class MyTrackPointsApi(GenericAPIView):
                 or "unknown"
             )
 
-            UserTrackPoint.objects.create(
-                user=request.user,
+            track_points.append(UserTrackPoint(
+                user_id=request.user.id,
                 latitude=item["latitude"],
                 longitude=item["longitude"],
                 horizontal_accuracy=item.get("horizontal_accuracy"),
@@ -1756,14 +1876,30 @@ class MyTrackPointsApi(GenericAPIView):
                 steps_delta=item.get("steps_delta"),
                 recorded_at=recorded_at,
                 day=day,
-            )
+            ))
             affected_days.add(day)
-            created += 1
 
+        if track_points:
+            UserTrackPoint.objects.bulk_create(
+                track_points,
+                batch_size=TRACK_POINTS_BULK_CREATE_BATCH_SIZE,
+            )
+
+        rebuilt_days = []
         for day in affected_days or {timezone.localdate()}:
-            rebuild_user_matched_segments(request.user, day)
+            try:
+                if rebuild_user_matched_segments_throttled(request.user, day):
+                    rebuilt_days.append(day.isoformat())
+            except (DatabaseError, IntegrityError) as exc:
+                print("Matched track rebuild skipped after upload:", exc)
 
-        return Response({"created": created}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "created": len(track_points),
+                "matched_rebuilt_days": rebuilt_days,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class MyTrackApi(APIView):
@@ -1865,6 +2001,12 @@ class MyMatchedTrackApi(APIView):
             if not parsed:
                 return Response({"detail": "Некорректный day"}, status=status.HTTP_400_BAD_REQUEST)
             day = parsed
+
+        if matched_segments_are_stale(request.user, day):
+            try:
+                rebuild_user_matched_segments_throttled(request.user, day, force=True)
+            except (DatabaseError, IntegrityError) as exc:
+                print("Matched track rebuild skipped before fetch:", exc)
 
         qs = MatchedTrackSegment.objects.filter(
             user=request.user,
