@@ -62,6 +62,7 @@ final class FriendsViewController: UIViewController {
     private let refreshControl = UIRefreshControl()
     private var items: [FriendLeaderboardItem] = []
     private let viewModel: ViewModel
+    private var previousPlacesByUserID: [Int: Int] = [:]
 
     private var selectedPeriod: LeaderboardPeriod = .today
     private let dropdownOverlay = UIControl()
@@ -202,9 +203,51 @@ private extension FriendsViewController {
             let result = await viewModel.getLeaderboardItems(period: selectedPeriod)
 
             await MainActor.run {
+                let movedUpUserIds = Set(
+                    result.compactMap { item -> Int? in
+                        guard let previousPlace = self.previousPlacesByUserID[item.userId],
+                              previousPlace > item.place else {
+                            return nil
+                        }
+
+                        return item.userId
+                    }
+                )
+
+                AvatarLoader.shared.prefetch(urlStrings: result.compactMap(\.avatarUrl))
                 self.items = result
                 self.tableView.reloadData()
+                self.previousPlacesByUserID = Dictionary(
+                    uniqueKeysWithValues: result.map { ($0.userId, $0.place) }
+                )
+                self.animateMovedUpRows(userIds: movedUpUserIds)
                 self.refreshControl.endRefreshing()
+            }
+        }
+    }
+
+    func animateMovedUpRows(userIds: Set<Int>) {
+        guard userIds.isEmpty == false else { return }
+
+        for indexPath in tableView.indexPathsForVisibleRows ?? [] {
+            guard indexPath.row < items.count,
+                  userIds.contains(items[indexPath.row].userId),
+                  let cell = tableView.cellForRow(at: indexPath) else {
+                continue
+            }
+
+            cell.contentView.transform = CGAffineTransform(translationX: 0, y: 12)
+            cell.contentView.alpha = 0.76
+
+            UIView.animate(
+                withDuration: 0.28,
+                delay: 0.02 * Double(indexPath.row),
+                usingSpringWithDamping: 0.78,
+                initialSpringVelocity: 0.6,
+                options: [.curveEaseOut, .beginFromCurrentState]
+            ) {
+                cell.contentView.transform = .identity
+                cell.contentView.alpha = 1
             }
         }
     }

@@ -13,6 +13,7 @@ final class GoalProgressView: UIView {
     private let fillView = UIView()
 
     private var fillWidthConstraint: NSLayoutConstraint?
+    private var currentProgress: CGFloat = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -55,20 +56,48 @@ final class GoalProgressView: UIView {
 
     func setProgress(_ progress: CGFloat, animated: Bool = true) {
         let p = max(0, min(1, progress))
+        currentProgress = p
         layoutIfNeeded()
         let targetWidth = trackView.bounds.width * p
         fillWidthConstraint?.constant = targetWidth
 
         if animated {
-            UIView.animate(withDuration: 0.25) { self.layoutIfNeeded() }
+            UIView.animate(
+                withDuration: 0.28,
+                delay: 0,
+                usingSpringWithDamping: 0.84,
+                initialSpringVelocity: 0.55,
+                options: [.curveEaseOut, .beginFromCurrentState]
+            ) {
+                self.layoutIfNeeded()
+            }
         } else {
             layoutIfNeeded()
         }
     }
 
+    func flashSuccess() {
+        let baseColor = Constants.orange ?? .systemOrange
+        let originalTrackColor = trackView.backgroundColor
+        let originalFillColor = fillView.backgroundColor
+
+        trackView.backgroundColor = baseColor.withAlphaComponent(0.24)
+        fillView.backgroundColor = baseColor
+        fillView.transform = CGAffineTransform(scaleX: 1, y: 1.8)
+
+        UIView.animate(
+            withDuration: 0.24,
+            delay: 0,
+            options: [.curveEaseOut, .beginFromCurrentState]
+        ) {
+            self.trackView.backgroundColor = originalTrackColor
+            self.fillView.backgroundColor = originalFillColor
+            self.fillView.transform = .identity
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        let current = (trackView.bounds.width > 0) ? (fillView.frame.width / trackView.bounds.width) : 0
-        fillWidthConstraint?.constant = trackView.bounds.width * current
+        fillWidthConstraint?.constant = trackView.bounds.width * currentProgress
     }
 }

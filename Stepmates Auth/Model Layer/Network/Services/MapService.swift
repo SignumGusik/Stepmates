@@ -144,6 +144,23 @@ final class MapService {
         )
     }
 
+    func fetchMyProfile() async throws -> MyProfileDTO {
+        guard let token = tokenStorage.get() else {
+            throw NSError(domain: "auth", code: 401)
+        }
+
+        guard let url = NetworkRoutes.myProfile.url else {
+            throw ConfigurationError.nilObject
+        }
+
+        return try await networkHandler.request(
+            url,
+            responseType: MyProfileDTO.self,
+            httpMethod: NetworkRoutes.myProfile.method.rawValue,
+            accessToken: token.accessToken
+        )
+    }
+
     func fetchFriendsMatchedTracks() async throws -> [FriendMatchedTrackResponse] {
         guard let token = tokenStorage.get() else {
             throw NSError(domain: "auth", code: 401)

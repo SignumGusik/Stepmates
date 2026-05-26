@@ -1674,6 +1674,27 @@ class MyLiveLocationApi(GenericAPIView):
             or signal_quality_from_score(defaults["confidence_score"])
         )
 
+        previous_live = UserLiveLocation.objects.filter(user=request.user).first()
+        if previous_live and defaults["confidence_score"] < 35:
+            jump_distance = distance_meters(
+                {
+                    "latitude": previous_live.latitude,
+                    "longitude": previous_live.longitude,
+                },
+                {
+                    "latitude": defaults["latitude"],
+                    "longitude": defaults["longitude"],
+                },
+            )
+            accuracy = defaults.get("horizontal_accuracy") or 0
+            max_reasonable_jump = max(250, accuracy * 0.8)
+
+            if jump_distance > max_reasonable_jump:
+                defaults["latitude"] = previous_live.latitude
+                defaults["longitude"] = previous_live.longitude
+                defaults["signal_quality"] = "poor"
+                defaults["movement_kind"] = "signal_lost"
+
         obj, _ = UserLiveLocation.objects.update_or_create(
             user=request.user,
             defaults=defaults,
@@ -1702,7 +1723,8 @@ class FriendsLiveLocationApi(APIView):
         for u1, u2 in friend_pairs:
             friend_ids.add(u2 if u1 == me_id else u1)
 
-        fresh_after = timezone.now() - timedelta(minutes=5)
+        fresh_after = timezone.now() - timedelta(minutes=30)
+        precise_after = timezone.now() - timedelta(minutes=5)
 
         qs = (
             USER_MODEL.objects
@@ -1720,6 +1742,13 @@ class FriendsLiveLocationApi(APIView):
             if live.updated_at < fresh_after:
                 continue
 
+            signal_quality = live.signal_quality
+            movement_kind = live.movement_kind
+
+            if live.updated_at < precise_after:
+                signal_quality = "poor"
+                movement_kind = "signal_lost"
+
             result.append({
                 "user_id": user.id,
                 "username": user.username,
@@ -1729,8 +1758,8 @@ class FriendsLiveLocationApi(APIView):
                 "horizontal_accuracy": live.horizontal_accuracy,
                 "confidence_score": live.confidence_score,
                 "movement_state": live.movement_state,
-                "movement_kind": live.movement_kind,
-                "signal_quality": live.signal_quality,
+                "movement_kind": movement_kind,
+                "signal_quality": signal_quality,
                 "updated_at": live.updated_at,
                 "is_me": False,
             })
@@ -2247,6 +2276,7 @@ class GroupLiveLocationApi(APIView):
 
         now = timezone.now()
         freshness_limit = now - timedelta(minutes=30)
+        precise_after = now - timedelta(minutes=5)
 
         locations = (
             UserLiveLocation.objects
@@ -2261,6 +2291,13 @@ class GroupLiveLocationApi(APIView):
         result = []
         for loc in locations:
             user = loc.user
+            signal_quality = loc.signal_quality
+            movement_kind = loc.movement_kind
+
+            if loc.updated_at < precise_after:
+                signal_quality = "poor"
+                movement_kind = "signal_lost"
+
             result.append({
                 "user_id": user.id,
                 "username": user.username,
@@ -2270,8 +2307,8 @@ class GroupLiveLocationApi(APIView):
                 "horizontal_accuracy": loc.horizontal_accuracy,
                 "confidence_score": loc.confidence_score,
                 "movement_state": loc.movement_state,
-                "movement_kind": loc.movement_kind,
-                "signal_quality": loc.signal_quality,
+                "movement_kind": movement_kind,
+                "signal_quality": signal_quality,
                 "updated_at": loc.updated_at,
                 "is_me": user.id == request.user.id,
             })

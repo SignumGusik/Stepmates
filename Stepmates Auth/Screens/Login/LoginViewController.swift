@@ -48,6 +48,7 @@ final class LoginViewController: UIViewController {
 
     weak var navDelegate: LoginNavDelegate?
     private let viewModel: ViewModel
+    private var slowLoginWorkItem: DispatchWorkItem?
 
     required init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -56,6 +57,10 @@ final class LoginViewController: UIViewController {
 
     required init?(coder: NSCoder) {
         preconditionFailure("init(coder:) not used")
+    }
+
+    deinit {
+        slowLoginWorkItem?.cancel()
     }
 }
 
@@ -181,9 +186,21 @@ private extension LoginViewController {
     }
 
     func setSubmitting(_ isSubmitting: Bool) {
+        slowLoginWorkItem?.cancel()
+        slowLoginWorkItem = nil
+
         submitButton.isEnabled = isSubmitting == false
         submitButton.alpha = isSubmitting ? 0.72 : 1
         submitButton.setTitle(isSubmitting ? "Входим..." : "Бежать дальше", for: .normal)
+
+        guard isSubmitting else { return }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.submitButton.setTitle("Сервер просыпается...", for: .normal)
+        }
+
+        slowLoginWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2, execute: workItem)
     }
 
     @objc func onRegisterTapped() {
@@ -228,4 +245,3 @@ extension LoginViewController: UITextFieldDelegate {
         return false
     }
 }
-

@@ -285,13 +285,13 @@ extension TrackingManager: LocationServiceDelegate {
         
         notifyLocation(displayLocation)
         notifySignalQuality()
+        sendLiveLocationIfNeeded(displayLocation, confidence: confidence)
         
         if trackRecorder.appendIfNeeded(location, motion: currentMotion) {
             trackSamples = trackRecorder.samples
             notifyTrack()
             enqueueTrackPoint(location, confidence: confidence)
             uploadTrackPointsIfNeeded()
-            sendLiveLocationIfNeeded(location, confidence: confidence)
         }
     }
     
@@ -346,6 +346,11 @@ private final class AdaptiveLocationSmoother {
         }
         
         if confidence.breakReason != nil && confidence.quality == .poor {
+            let suspiciousJump = distance > max(location.horizontalAccuracy * 0.6, 120)
+            if suspiciousJump {
+                return lastLocation
+            }
+
             self.lastLocation = location
             return location
         }

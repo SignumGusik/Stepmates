@@ -36,11 +36,16 @@ final class MapViewController: UIViewController {
     private var didMoveToUserLocation = false
     private var myRoutePolylines: [YMKPolylineMapObject] = []
     private var myRouteEventPlacemarks: [YMKPlacemarkMapObject] = []
+    private var pendingRouteSegments: [TrackSegment]?
+    private var routeRedrawWorkItem: DispatchWorkItem?
+    private var lastRouteRedrawAt = Date.distantPast
+    private let routeRedrawInterval: TimeInterval = 1.2
 
     private var currentUserPlacemark: YMKPlacemarkMapObject?
     private var currentUserAccuracyCircle: YMKCircleMapObject?
     private var currentUserPulseCircle: YMKCircleMapObject?
     private var currentUserDisplayPoint: YMKPoint?
+    private var currentUserAvatarImage: UIImage?
     private var pulseDisplayLink: CADisplayLink?
     private var pulseStartedAt = Date()
     private var friendsTimer: Timer?
@@ -68,6 +73,7 @@ final class MapViewController: UIViewController {
     private let centerOnMeButton = UIButton(type: .system)
     private let sharingToggleButton = UIButton(type: .system)
     private var isSharingLocation = true
+    private let mapDimControl = UIControl()
     private let emptyRoutesView = UIView()
     private let emptyRoutesTitleLabel = UILabel()
     private let emptyRoutesSubtitleLabel = UILabel()
@@ -83,6 +89,10 @@ final class MapViewController: UIViewController {
     private var placemarkAnimationStarts: [Int: Date] = [:]
     private var placemarkAnimationFromPoints: [Int: YMKPoint] = [:]
     private var placemarkAnimationToPoints: [Int: YMKPoint] = [:]
+    private var lastFollowCameraPoint: YMKPoint?
+    private var lastFollowCameraMoveAt: Date?
+    private let followCameraMinInterval: TimeInterval = 1.0
+    private let followCameraMinDistance: CLLocationDistance = 8
 
 
     override func viewDidLoad() {
@@ -103,6 +113,7 @@ final class MapViewController: UIViewController {
         setupFriendCard()
         bindViewModel()
 
+        loadCurrentUserAvatar()
         loadMyTrack()
 
         Task {
@@ -131,6 +142,8 @@ final class MapViewController: UIViewController {
         stopFriendsPolling()
         stopSignalPolling()
         stopPulse()
+        routeRedrawWorkItem?.cancel()
+        routeRedrawWorkItem = nil
     }
 
     override func viewDidLayoutSubviews() {
@@ -181,7 +194,7 @@ private extension MapViewController {
             centerOnMeButton.widthAnchor.constraint(equalToConstant: 48),
             centerOnMeButton.heightAnchor.constraint(equalToConstant: 48)
         ])
-        
+
         applyFollowModeState()
     }
     func setupSharingToggleButton() {
@@ -276,8 +289,22 @@ private extension MapViewController {
             emptyRoutesSubtitleLabel.bottomAnchor.constraint(equalTo: emptyRoutesView.bottomAnchor, constant: -18)
         ])
     }
-    
+
     func setupFriendCard() {
+        mapDimControl.translatesAutoresizingMaskIntoConstraints = false
+        mapDimControl.backgroundColor = UIColor.black.withAlphaComponent(0.12)
+        mapDimControl.alpha = 0
+        mapDimControl.isHidden = true
+        mapDimControl.addTarget(self, action: #selector(onMapDimTapped), for: .touchUpInside)
+        view.addSubview(mapDimControl)
+
+        NSLayoutConstraint.activate([
+            mapDimControl.topAnchor.constraint(equalTo: view.topAnchor),
+            mapDimControl.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            mapDimControl.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            mapDimControl.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
         friendCardView.translatesAutoresizingMaskIntoConstraints = false
         friendCardView.backgroundColor = UIColor.white.withAlphaComponent(0.97)
         friendCardView.layer.cornerRadius = 24
@@ -287,30 +314,30 @@ private extension MapViewController {
         friendCardView.layer.shadowOffset = CGSize(width: 0, height: 8)
         friendCardView.alpha = 0
         friendCardView.isHidden = true
-        
+
         friendCardAvatarImageView.translatesAutoresizingMaskIntoConstraints = false
         friendCardAvatarImageView.contentMode = .scaleAspectFill
         friendCardAvatarImageView.layer.cornerRadius = 28
         friendCardAvatarImageView.clipsToBounds = true
         friendCardAvatarImageView.backgroundColor = Constants.lightPurple ?? UIColor.systemGray5
-        
+
         friendCardNameLabel.translatesAutoresizingMaskIntoConstraints = false
         friendCardNameLabel.font = UIFont(name: Constants.manropeExtraBold, size: 18)
             ?? UIFont.systemFont(ofSize: 18, weight: .black)
         friendCardNameLabel.textColor = .black
         friendCardNameLabel.lineBreakMode = .byTruncatingTail
-        
+
         friendCardStatusLabel.translatesAutoresizingMaskIntoConstraints = false
         friendCardStatusLabel.font = UIFont(name: Constants.manropeBold, size: 13)
             ?? UIFont.systemFont(ofSize: 13, weight: .bold)
         friendCardStatusLabel.textColor = Constants.purple ?? .systemBlue
-        
+
         friendCardDetailLabel.translatesAutoresizingMaskIntoConstraints = false
         friendCardDetailLabel.font = UIFont(name: Constants.manropeMedium, size: 12)
             ?? UIFont.systemFont(ofSize: 12, weight: .medium)
         friendCardDetailLabel.textColor = UIColor.black.withAlphaComponent(0.48)
         friendCardDetailLabel.numberOfLines = 2
-        
+
         friendCardFollowBadge.translatesAutoresizingMaskIntoConstraints = false
         friendCardFollowBadge.font = UIFont(name: Constants.manropeBold, size: 11)
             ?? UIFont.systemFont(ofSize: 11, weight: .bold)
@@ -320,41 +347,41 @@ private extension MapViewController {
         friendCardFollowBadge.backgroundColor = Constants.orange ?? .systemOrange
         friendCardFollowBadge.layer.cornerRadius = 12
         friendCardFollowBadge.clipsToBounds = true
-        
+
         view.addSubview(friendCardView)
         friendCardView.addSubview(friendCardAvatarImageView)
         friendCardView.addSubview(friendCardNameLabel)
         friendCardView.addSubview(friendCardStatusLabel)
         friendCardView.addSubview(friendCardDetailLabel)
         friendCardView.addSubview(friendCardFollowBadge)
-        
+
         let tap = UITapGestureRecognizer(target: self, action: #selector(onFriendCardTapped))
         friendCardView.addGestureRecognizer(tap)
-        
+
         NSLayoutConstraint.activate([
             friendCardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 18),
             friendCardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
             friendCardView.bottomAnchor.constraint(equalTo: stepsCardView.topAnchor, constant: -12),
             friendCardView.heightAnchor.constraint(equalToConstant: 92),
-            
+
             friendCardAvatarImageView.leadingAnchor.constraint(equalTo: friendCardView.leadingAnchor, constant: 16),
             friendCardAvatarImageView.centerYAnchor.constraint(equalTo: friendCardView.centerYAnchor),
             friendCardAvatarImageView.widthAnchor.constraint(equalToConstant: 56),
             friendCardAvatarImageView.heightAnchor.constraint(equalToConstant: 56),
-            
+
             friendCardFollowBadge.trailingAnchor.constraint(equalTo: friendCardView.trailingAnchor, constant: -14),
             friendCardFollowBadge.topAnchor.constraint(equalTo: friendCardView.topAnchor, constant: 15),
             friendCardFollowBadge.widthAnchor.constraint(equalToConstant: 58),
             friendCardFollowBadge.heightAnchor.constraint(equalToConstant: 24),
-            
+
             friendCardNameLabel.leadingAnchor.constraint(equalTo: friendCardAvatarImageView.trailingAnchor, constant: 13),
             friendCardNameLabel.trailingAnchor.constraint(equalTo: friendCardFollowBadge.leadingAnchor, constant: -10),
             friendCardNameLabel.topAnchor.constraint(equalTo: friendCardView.topAnchor, constant: 16),
-            
+
             friendCardStatusLabel.leadingAnchor.constraint(equalTo: friendCardNameLabel.leadingAnchor),
             friendCardStatusLabel.trailingAnchor.constraint(equalTo: friendCardNameLabel.trailingAnchor),
             friendCardStatusLabel.topAnchor.constraint(equalTo: friendCardNameLabel.bottomAnchor, constant: 3),
-            
+
             friendCardDetailLabel.leadingAnchor.constraint(equalTo: friendCardNameLabel.leadingAnchor),
             friendCardDetailLabel.trailingAnchor.constraint(equalTo: friendCardView.trailingAnchor, constant: -16),
             friendCardDetailLabel.topAnchor.constraint(equalTo: friendCardStatusLabel.bottomAnchor, constant: 4)
@@ -668,7 +695,7 @@ private extension MapViewController {
         isFollowModeEnabled = true
         hideFriendCard()
         applyFollowModeState()
-        moveCamera(to: location)
+        moveCamera(to: location, duration: 0.75, force: true)
     }
     @objc func onSharingToggleTapped() {
         isSharingLocation.toggle()
@@ -705,11 +732,24 @@ private extension MapViewController {
             latitude: location.coordinate.latitude,
             longitude: location.coordinate.longitude
         )
-        
+
         moveCamera(to: point, duration: duration)
     }
-    
-    func moveCamera(to point: YMKPoint, duration: Float = 1) {
+
+    func moveCamera(to location: CLLocation, duration: Float = 1, force: Bool) {
+        let point = YMKPoint(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+        )
+
+        moveCamera(to: point, duration: duration, force: force)
+    }
+
+    func moveCamera(to point: YMKPoint, duration: Float = 1, force: Bool = false) {
+        guard force || shouldMoveFollowCamera(to: point) else { return }
+
+        lastFollowCameraPoint = point
+        lastFollowCameraMoveAt = Date()
 
         let cameraPosition = YMKCameraPosition(
             target: point,
@@ -724,22 +764,37 @@ private extension MapViewController {
             cameraCallback: nil
         )
     }
-    
+
+    func shouldMoveFollowCamera(to point: YMKPoint) -> Bool {
+        guard let lastFollowCameraPoint,
+              let lastFollowCameraMoveAt else {
+            return true
+        }
+
+        let elapsed = Date().timeIntervalSince(lastFollowCameraMoveAt)
+        let distance = CLLocation(
+            latitude: lastFollowCameraPoint.latitude,
+            longitude: lastFollowCameraPoint.longitude
+        ).distance(from: CLLocation(latitude: point.latitude, longitude: point.longitude))
+
+        return elapsed >= followCameraMinInterval || distance >= followCameraMinDistance
+    }
+
     func followCurrentLocationIfNeeded(_ location: CLLocation) {
         guard isFollowModeEnabled, followedFriendId == nil else { return }
         moveCamera(to: location, duration: didMoveToUserLocation ? 0.55 : 1)
     }
-    
+
     func followFriendIfNeeded(userId: Int, point: YMKPoint) {
         guard isFollowModeEnabled, followedFriendId == userId else { return }
         moveCamera(to: point, duration: 0.55)
     }
-    
+
     func applyFollowModeState() {
         centerOnMeButton.backgroundColor = isFollowModeEnabled && followedFriendId == nil
             ? (Constants.purple ?? .systemBlue)
             : UIColor.white.withAlphaComponent(0.96)
-        
+
         centerOnMeButton.tintColor = isFollowModeEnabled && followedFriendId == nil
             ? .white
             : (Constants.purple ?? .systemBlue)
@@ -765,12 +820,64 @@ private extension MapViewController {
         }
     }
 
+    func loadCurrentUserAvatar() {
+        Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let profile = try await mapService.fetchMyProfile()
+                guard let avatarUrl = profile.avatarUrl, avatarUrl.isEmpty == false else { return }
+
+                AvatarLoader.shared.load(urlString: avatarUrl) { [weak self] image in
+                    guard let self, let image else { return }
+                    self.currentUserAvatarImage = image
+                    self.applyCurrentUserMarkerStyle(
+                        quality: self.currentSignalQuality,
+                        isLost: self.isSignalLost()
+                    )
+                }
+            } catch {
+                print("Current user avatar fetch error:", error.localizedDescription)
+            }
+        }
+    }
+
+    func scheduleMyRouteRedraw(with segments: [TrackSegment]) {
+        pendingRouteSegments = segments
+
+        let elapsed = Date().timeIntervalSince(lastRouteRedrawAt)
+        guard elapsed < routeRedrawInterval else {
+            routeRedrawWorkItem?.cancel()
+            routeRedrawWorkItem = nil
+            performPendingRouteRedraw()
+            return
+        }
+
+        guard routeRedrawWorkItem == nil else { return }
+
+        let delay = routeRedrawInterval - elapsed
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.routeRedrawWorkItem = nil
+            self?.performPendingRouteRedraw()
+        }
+
+        routeRedrawWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    func performPendingRouteRedraw() {
+        guard let segments = pendingRouteSegments else { return }
+        pendingRouteSegments = nil
+        lastRouteRedrawAt = Date()
+        redrawMyRoute(with: segments)
+    }
+
     func redrawMyRoute(with segments: [TrackSegment]) {
         for polyline in myRoutePolylines where polyline.isValid {
             mapView.mapWindow.map.mapObjects.remove(with: polyline)
         }
         myRoutePolylines.removeAll()
-        
+
         for placemark in myRouteEventPlacemarks where placemark.isValid {
             mapView.mapWindow.map.mapObjects.remove(with: placemark)
         }
@@ -791,7 +898,7 @@ private extension MapViewController {
             )
 
             guard segment.count >= 2 else { continue }
-            
+
             if !sourceSegment.isDrawableWalkSegment {
                 skippedReason = sourceSegment.breakReason ?? breakReason(for: sourceSegment)
                 if let first = segment.first {
@@ -815,7 +922,7 @@ private extension MapViewController {
                     zIndex: 7,
                     storeIn: &myRoutePolylines
                 )
-                
+
                 if skippedReason != nil {
                     addRouteEvent(
                         title: "сигнал вернулся",
@@ -835,9 +942,11 @@ private extension MapViewController {
                 zIndex: index == segments.count - 1 ? 12 : 9,
                 storeIn: &myRoutePolylines
             )
-            
+
             previousVisibleEnd = segment.last
         }
+
+        updateEmptyRoutesState(tracks: viewModel.visibleTracks)
     }
 
     func myRouteColor(isNewest: Bool, quality: TrackQuality) -> UIColor {
@@ -852,7 +961,7 @@ private extension MapViewController {
             return .clear
         }
     }
-    
+
     func addGradientRouteSegment(
         points: [YMKPoint],
         baseColor: UIColor,
@@ -862,26 +971,34 @@ private extension MapViewController {
         storeIn polylines: inout [YMKPolylineMapObject]
     ) {
         guard points.count >= 2 else { return }
-        
+
         for index in 0..<(points.count - 1) {
             let progress = Double(index + 1) / Double(max(points.count - 1, 1))
             let alphaBoost = isNewest ? 0.18 : 0
             let qualityAlpha = quality == .good ? 0.52 : 0.32
             let alpha = min(0.98, qualityAlpha + progress * 0.34 + alphaBoost)
-            
+
             let polyline = YMKPolyline(points: [points[index], points[index + 1]])
             let object = mapView.mapWindow.map.mapObjects.addPolyline(with: polyline)
-            
-            object.setStrokeColorWith(baseColor.withAlphaComponent(alpha))
-            object.outlineColor = UIColor.white.withAlphaComponent(isNewest ? 0.86 : 0.46)
+            let strokeColor = baseColor.withAlphaComponent(alpha)
+            let outlineColor = UIColor.white.withAlphaComponent(isNewest ? 0.86 : 0.46)
+
+            object.setStrokeColorWith(strokeColor)
+            object.outlineColor = outlineColor
             object.outlineWidth = quality == .weak ? 1.1 : (isNewest ? 2.1 : 1.4)
             object.strokeWidth = quality == .weak ? 4.3 : (isNewest ? 6.8 : 5.2)
             object.zIndex = zIndex + Float(progress * 0.5)
-            
+            animateRoutePolylineAppearance(
+                object,
+                delay: min(0.42, Double(index) * 0.018),
+                strokeColor: strokeColor,
+                outlineColor: outlineColor
+            )
+
             polylines.append(object)
         }
     }
-    
+
     func addRouteEvent(
         title: String,
         point: YMKPoint,
@@ -896,23 +1013,23 @@ private extension MapViewController {
         placemark.zIndex = 18
         placemarks.append(placemark)
     }
-    
+
     func breakReason(for segment: TrackSegment) -> TrackBreakReason? {
         if segment.movementKind == .transport {
             return .vehicleJump
         }
-        
+
         if segment.movementKind == .signalLost {
             return .lostSignal
         }
-        
+
         if segment.quality == .poor {
             return .poorAccuracy
         }
-        
+
         return segment.breakReason
     }
-    
+
     func eventColor(for reason: TrackBreakReason?, movementKind: MapMovementKind) -> UIColor {
         switch reason {
         case .vehicleJump:
@@ -942,16 +1059,77 @@ private extension MapViewController {
 
         let polyline = YMKPolyline(points: [start, end])
         let object = mapView.mapWindow.map.mapObjects.addPolyline(with: polyline)
+        let outlineColor = UIColor.white.withAlphaComponent(0.5)
 
         object.setStrokeColorWith(color)
-        object.outlineColor = UIColor.white.withAlphaComponent(0.5)
+        object.outlineColor = outlineColor
         object.outlineWidth = outlineWidth
         object.strokeWidth = strokeWidth
         object.dashLength = 14
         object.gapLength = 10
         object.zIndex = zIndex
+        pulseApproximateRouteGap(object, strokeColor: color, outlineColor: outlineColor)
 
         polylines.append(object)
+    }
+
+    func animateRoutePolylineAppearance(
+        _ object: YMKPolylineMapObject,
+        delay: TimeInterval,
+        strokeColor: UIColor,
+        outlineColor: UIColor
+    ) {
+        object.setStrokeColorWith(routeColor(strokeColor, alphaMultiplier: 0))
+        object.outlineColor = routeColor(outlineColor, alphaMultiplier: 0)
+
+        for step in 1...4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay + Double(step) * 0.035) {
+                guard object.isValid else { return }
+                let multiplier = CGFloat(step) / 4
+                object.setStrokeColorWith(self.routeColor(strokeColor, alphaMultiplier: multiplier))
+                object.outlineColor = self.routeColor(outlineColor, alphaMultiplier: multiplier)
+            }
+        }
+    }
+
+    func pulseApproximateRouteGap(
+        _ object: YMKPolylineMapObject,
+        strokeColor: UIColor,
+        outlineColor: UIColor
+    ) {
+        object.setStrokeColorWith(routeColor(strokeColor, alphaMultiplier: 0.42))
+        object.outlineColor = routeColor(outlineColor, alphaMultiplier: 0.42)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            guard object.isValid else { return }
+            object.setStrokeColorWith(self.routeColor(strokeColor, alphaMultiplier: 1))
+            object.outlineColor = self.routeColor(outlineColor, alphaMultiplier: 1)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.58) {
+            guard object.isValid else { return }
+            object.setStrokeColorWith(self.routeColor(strokeColor, alphaMultiplier: 0.58))
+            object.outlineColor = self.routeColor(outlineColor, alphaMultiplier: 0.58)
+        }
+    }
+
+    func routeColor(_ color: UIColor, alphaMultiplier: CGFloat) -> UIColor {
+        let resolvedColor = color.resolvedColor(with: traitCollection)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 1
+
+        if resolvedColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+            return UIColor(
+                red: red,
+                green: green,
+                blue: blue,
+                alpha: max(0, min(1, alpha * alphaMultiplier))
+            )
+        }
+
+        return resolvedColor.withAlphaComponent(max(0, min(1, alphaMultiplier)))
     }
 }
 
@@ -986,6 +1164,7 @@ private extension MapViewController {
         placemark.zIndex = 30
         currentUserPlacemark = placemark
         applyCurrentUserMarkerStyle(quality: currentSignalQuality, isLost: isSignalLost())
+        updateEmptyRoutesState(tracks: viewModel.visibleTracks)
     }
 
     func updateCurrentUserAccuracyCircle(with location: CLLocation, point: YMKPoint) {
@@ -1042,10 +1221,10 @@ private extension MapViewController {
             currentUserAccuracyCircle.strokeWidth = 1.8
         }
     }
-    
+
     func updateCurrentUserPulseCircle(point: YMKPoint) {
         let circle = YMKCircle(center: point, radius: 16)
-        
+
         if let currentUserPulseCircle, currentUserPulseCircle.isValid {
             currentUserPulseCircle.geometry = circle
         } else {
@@ -1054,66 +1233,76 @@ private extension MapViewController {
             object.zIndex = 23
             currentUserPulseCircle = object
         }
-        
+
         applyPulseVisibility()
     }
-    
+
     func applyCurrentUserMarkerStyle(quality: TrackQuality, isLost: Bool) {
         let muted = isLost || quality == .poor || !isSharingLocation
         currentUserPlacemark?.opacity = muted ? 0.58 : 1
-        
-        if muted {
-            currentUserPlacemark?.setIconWith(FriendMarkerFactory.makeCurrentUserLiveImage(
-                username: "Я",
-                ringColor: UIColor.systemGray
-            ))
+        let ringColor = muted
+            ? UIColor.systemGray
+            : (Constants.orange ?? .systemOrange)
+
+        if let currentUserAvatarImage {
+            currentUserPlacemark?.setIconWith(
+                FriendMarkerFactory.makeCurrentUserLiveAvatarImage(
+                    currentUserAvatarImage,
+                    ringColor: ringColor
+                )
+            )
         } else {
-            currentUserPlacemark?.setIconWith(FriendMarkerFactory.makeCurrentUserLiveImage())
+            currentUserPlacemark?.setIconWith(
+                FriendMarkerFactory.makeCurrentUserLiveImage(
+                    username: "Я",
+                    ringColor: ringColor
+                )
+            )
         }
-        
+
         applyPulseVisibility()
     }
-    
+
     func applyPulseVisibility() {
         let shouldPulse = currentSignalQuality == .good &&
             !isSignalLost() &&
             isSharingLocation &&
             currentUserDisplayPoint != nil
-        
+
         currentUserPulseCircle?.isVisible = shouldPulse
-        
+
         if shouldPulse {
             startPulseIfNeeded()
         } else {
             stopPulse()
         }
     }
-    
+
     func startPulseIfNeeded() {
         guard pulseDisplayLink == nil else { return }
-        
+
         pulseStartedAt = Date()
         let displayLink = CADisplayLink(target: self, selector: #selector(onPulseFrame))
         displayLink.add(to: .main, forMode: .common)
         pulseDisplayLink = displayLink
     }
-    
+
     func stopPulse() {
         pulseDisplayLink?.invalidate()
         pulseDisplayLink = nil
         currentUserPulseCircle?.isVisible = false
     }
-    
+
     @objc func onPulseFrame() {
         guard let currentUserPulseCircle,
               currentUserPulseCircle.isValid,
               let currentUserDisplayPoint else { return }
-        
+
         let elapsed = Date().timeIntervalSince(pulseStartedAt)
         let progress = (elapsed.truncatingRemainder(dividingBy: 1.8)) / 1.8
         let radius = Float(18 + progress * 30)
         let alpha = CGFloat(max(0, 0.18 * (1 - progress)))
-        
+
         currentUserPulseCircle.geometry = YMKCircle(
             center: currentUserDisplayPoint,
             radius: radius
@@ -1133,6 +1322,7 @@ private extension MapViewController {
 
         let visibleFriends = friends.filter { !$0.isMe }
         let incomingIds = Set(visibleFriends.map { $0.userId })
+        AvatarLoader.shared.prefetch(urlStrings: visibleFriends.compactMap(\.avatarUrl))
 
         for (userId, placemark) in friendPlacemarks where !incomingIds.contains(userId) {
             if placemark.isValid {
@@ -1158,8 +1348,9 @@ private extension MapViewController {
                 )
                 followFriendIfNeeded(userId: friend.userId, point: point)
                 existing.zIndex = 22
+                existing.opacity = friendMarkerOpacity(friend)
                 existing.userData = friend
-                
+
                 if selectedFriend?.userId == friend.userId {
                     selectedFriend = friend
                     configureFriendCard(friend)
@@ -1179,6 +1370,7 @@ private extension MapViewController {
                 image: fallbackImage
             )
             placemark.zIndex = 22
+            placemark.opacity = friendMarkerOpacity(friend)
             placemark.userData = friend
 
             let tapListener = MapFriendTapListener { [weak self] friend in
@@ -1192,6 +1384,8 @@ private extension MapViewController {
 
             loadAvatarIfNeeded(for: friend)
         }
+
+        updateEmptyRoutesState(tracks: viewModel.visibleTracks)
     }
 
     func loadAvatarIfNeeded(for friend: FriendLiveLocation) {
@@ -1245,6 +1439,7 @@ private extension MapViewController {
             )
             followFriendIfNeeded(userId: userId, point: point)
             placemark.zIndex = 22
+            placemark.opacity = friendMarkerOpacity(friend)
             placemark.userData = friend
 
             let previousUrl = currentFriendAvatarUrls[userId]
@@ -1265,6 +1460,7 @@ private extension MapViewController {
         )
 
         placemark.zIndex = 22
+        placemark.opacity = friendMarkerOpacity(friend)
         placemark.userData = friend
 
         let tapListener = MapFriendTapListener { [weak self] friend in
@@ -1278,6 +1474,13 @@ private extension MapViewController {
         currentFriendAvatarUrls[userId] = avatarUrl
 
         loadAvatarIfNeeded(for: friend)
+        updateEmptyRoutesState(tracks: viewModel.visibleTracks)
+    }
+
+    func friendMarkerOpacity(_ friend: FriendLiveLocation) -> Float {
+        let quality = trackQuality(from: friend.signalQuality)
+        let isStale = (parseServerDate(friend.updatedAt) ?? .distantPast).timeIntervalSinceNow < -5 * 60
+        return (quality == .poor || isStale) ? 0.68 : 1
     }
 }
 
@@ -1289,6 +1492,7 @@ private extension MapViewController {
         guard isMapScreenActive else { return }
 
         let incomingIds = Set(tracks.map { $0.userId })
+        AvatarLoader.shared.prefetch(urlStrings: tracks.compactMap(\.avatarUrl))
 
         for (userId, polylines) in friendRoutePolylines where !incomingIds.contains(userId) {
             for polyline in polylines where polyline.isValid {
@@ -1388,7 +1592,7 @@ private extension MapViewController {
             return .clear
         }
     }
-    
+
     func trackQuality(from rawValue: String?) -> TrackQuality {
         switch rawValue {
         case "good":
@@ -1401,10 +1605,10 @@ private extension MapViewController {
             return .weak
         }
     }
-    
+
     func mapMovementKind(from rawValue: String?) -> MapMovementKind {
         guard let rawValue else { return .unknown }
-        
+
         switch rawValue {
         case "walking", "running":
             return .walking
@@ -1418,12 +1622,12 @@ private extension MapViewController {
             return MapMovementKind(rawValue: rawValue) ?? .unknown
         }
     }
-    
+
     func trackBreakReason(from rawValue: String?) -> TrackBreakReason? {
         guard let rawValue else { return nil }
         return TrackBreakReason(rawValue: rawValue)
     }
-    
+
     func confidenceScore(from matchingConfidence: String?) -> Int {
         switch matchingConfidence {
         case "high":
@@ -1441,81 +1645,89 @@ private extension MapViewController {
 // MARK: - Friend Card
 
 private extension MapViewController {
-    
+
     func showFriendCard(_ friend: FriendLiveLocation) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
         selectedFriend = friend
         followedFriendId = friend.userId
         isFollowModeEnabled = true
         applyFollowModeState()
         configureFriendCard(friend)
-        
+
         let point = YMKPoint(latitude: friend.latitude, longitude: friend.longitude)
-        moveCamera(to: point, duration: 0.65)
-        
+        moveCamera(to: point, duration: 0.65, force: true)
+
+        mapDimControl.isHidden = false
+        mapDimControl.alpha = 0
         friendCardView.isHidden = false
-        friendCardView.transform = CGAffineTransform(translationX: 0, y: 16)
-        
+        friendCardView.transform = CGAffineTransform(translationX: 0, y: 32)
+            .scaledBy(x: 0.98, y: 0.98)
+
         UIView.animate(
-            withDuration: 0.26,
+            withDuration: 0.28,
             delay: 0,
-            usingSpringWithDamping: 0.86,
-            initialSpringVelocity: 0.5,
+            usingSpringWithDamping: 0.78,
+            initialSpringVelocity: 0.62,
             options: [.curveEaseOut]
         ) {
+            self.mapDimControl.alpha = 1
             self.friendCardView.alpha = 1
             self.friendCardView.transform = .identity
         }
     }
-    
+
     func hideFriendCard() {
         selectedFriend = nil
         followedFriendId = nil
-        
+
         UIView.animate(withDuration: 0.18) {
+            self.mapDimControl.alpha = 0
             self.friendCardView.alpha = 0
-            self.friendCardView.transform = CGAffineTransform(translationX: 0, y: 12)
+            self.friendCardView.transform = CGAffineTransform(translationX: 0, y: 28)
         } completion: { _ in
+            self.mapDimControl.isHidden = true
             self.friendCardView.isHidden = true
             self.friendCardView.transform = .identity
         }
     }
-    
+
     func configureFriendCard(_ friend: FriendLiveLocation) {
         friendCardNameLabel.text = friend.username
         friendCardStatusLabel.text = friendMovementText(friend)
         friendCardStatusLabel.textColor = friendStatusColor(friend)
         friendCardDetailLabel.text = friendDetailText(friend)
         friendCardAvatarImageView.image = FriendMarkerFactory.makeCardAvatarFallbackImage(username: friend.username)
-        
+
         if let avatarUrl = friend.avatarUrl, !avatarUrl.isEmpty {
             AvatarLoader.shared.load(urlString: avatarUrl) { [weak self] image in
                 guard let self else { return }
                 guard self.selectedFriend?.userId == friend.userId else { return }
                 guard let image else { return }
-                
+
                 DispatchQueue.main.async {
                     self.friendCardAvatarImageView.image = image
                 }
             }
         }
     }
-    
+
     func friendMovementText(_ friend: FriendLiveLocation) -> String {
         let kind = mapMovementKind(from: friend.movementKind ?? friend.movementState)
         if kind != .unknown {
             return kind.labelText
         }
-        
+
         if let signalQuality = friend.signalQuality, signalQuality == "poor" {
             return "сигнал потерян"
         }
-        
+
         return "на карте"
     }
-    
+
     func friendStatusColor(_ friend: FriendLiveLocation) -> UIColor {
         let kind = mapMovementKind(from: friend.movementKind ?? friend.movementState)
-        
+
         switch kind {
         case .walking:
             return Constants.purple ?? .systemBlue
@@ -1529,55 +1741,59 @@ private extension MapViewController {
             return Constants.purple ?? .systemBlue
         }
     }
-    
+
     func friendDetailText(_ friend: FriendLiveLocation) -> String {
         var items: [String] = []
         items.append(relativeTimeText(from: friend.updatedAt))
-        
+
         if let horizontalAccuracy = friend.horizontalAccuracy {
             items.append("точность \(formatAccuracy(horizontalAccuracy))")
         }
-        
+
         if let confidenceScore = friend.confidenceScore {
             items.append("доверие \(confidenceScore)%")
         }
-        
+
         return items.joined(separator: " · ")
     }
-    
+
     func relativeTimeText(from rawDate: String) -> String {
         guard let date = parseServerDate(rawDate) else {
             return "обновлено недавно"
         }
-        
+
         let seconds = max(0, Date().timeIntervalSince(date))
-        
+
         if seconds < 60 {
             return "только что"
         }
-        
+
         if seconds < 3600 {
             return "был здесь \(Int(seconds / 60)) мин назад"
         }
-        
+
         return "был здесь \(Int(seconds / 3600)) ч назад"
     }
-    
+
     func parseServerDate(_ rawDate: String) -> Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
+
         if let date = formatter.date(from: rawDate) {
             return date
         }
-        
+
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: rawDate)
     }
-    
+
     @objc func onFriendCardTapped() {
         guard let selectedFriend else { return }
         onFriendTap?(selectedFriend)
+    }
+
+    @objc func onMapDimTapped() {
+        hideFriendCard()
     }
 }
 
@@ -1611,7 +1827,7 @@ extension MapViewController: TrackingManagerObserver {
     }
 
     func trackingManager(_ manager: TrackingManager, didUpdateTrackSegments segments: [TrackSegment]) {
-        redrawMyRoute(with: segments)
+        scheduleMyRouteRedraw(with: segments)
     }
 
     func trackingManager(_ manager: TrackingManager, didUpdateSignalQuality quality: TrackQuality) {
@@ -1628,17 +1844,24 @@ extension MapViewController: TrackingManagerObserver {
 private extension MapViewController {
 
     func updateEmptyRoutesState(tracks: [FriendMatchedTrackResponse]) {
-        let hasVisibleRoute = tracks.contains { track in
+        let hasAnyTrackData = tracks.contains { track in
             track.segments.contains { segment in
                 let kind = mapMovementKind(from: segment.movementKind ?? segment.movementState)
-                return segment.displayPoints.count >= 2 &&
-                    segment.signalQuality != "poor" &&
-                    kind.isRouteDrawable &&
-                    segment.breakReason == nil
+                return segment.displayPoints.count >= 2 || kind != .unknown
             }
         }
 
-        let shouldShow = !hasVisibleRoute
+        let hasOwnRoute = myRoutePolylines.contains { $0.isValid }
+        let hasFriendRoute = friendRoutePolylines.values.flatMap { $0 }.contains { $0.isValid }
+        let hasCurrentUser = currentUserPlacemark?.isValid == true
+        let hasFriendMarkers = friendPlacemarks.values.contains { $0.isValid }
+        let hasAnyMapContent = hasOwnRoute ||
+            hasFriendRoute ||
+            hasCurrentUser ||
+            hasFriendMarkers ||
+            hasAnyTrackData
+
+        let shouldShow = !hasAnyMapContent
 
         switch viewModel.selectedScope {
         case .allFriends:

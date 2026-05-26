@@ -19,18 +19,29 @@ struct HomeCounters {
     let friendsCount: Int
     let groupsCount: Int
     let notificationsCount: Int
+    let streakDays: Int
+    let dailyGoalSteps: Int?
+}
+
+private struct HomeProfileSummary {
+    let friendsCount: Int
+    let streakDays: Int
+    let dailyGoalSteps: Int?
 }
 
 extension HomeViewController {
     class ViewModel {
         static let defaultInfoText = "Tap Fetch Button to fetch secured data"
-        
+
         @Published var infoText = HomeViewController.ViewModel.defaultInfoText
-        
+
         let username: String
         private let networkHandler: NetworkHandler
         private let tokenStorage: AccessTokenStorage
-        
+        private var cachedHomeCounters: HomeCounters?
+        private var cachedHomeCountersAt: Date?
+        private let homeCountersCacheTTL: TimeInterval = 30
+
         init(username: String, networkHandler: NetworkHandler, tokenStorage: AccessTokenStorage) {
             self.username = username
             self.networkHandler = networkHandler
@@ -45,7 +56,7 @@ extension HomeViewController.ViewModel {
     func resetInfoText() {
         infoText = HomeViewController.ViewModel.self.defaultInfoText
     }
-    
+
     func fetchSecureData() async throws {
         let route = NetworkRoutes.fatchData
         let method = route.method
@@ -54,7 +65,7 @@ extension HomeViewController.ViewModel {
             print("No Url access token found")
             throw ConfigurationError.nilObject
         }
-        
+
         let responseData = try await networkHandler.request(
             url,
             responseType: SecureFetchData.self,
@@ -63,17 +74,17 @@ extension HomeViewController.ViewModel {
         )
         infoText = responseData.message
     }
-    
+
     func syncTodaySteps(_ steps: Int) async -> SyncTodayStepsResponse? {
         let route = NetworkRoutes.syncTodaySteps
         let method = route.method
-        
+
         guard let url = route.url,
               let accessToken = tokenStorage.get() else {
             print("No Url access token found")
             return nil
         }
-        
+
         do {
             return try await networkHandler.request(
                 url,
@@ -125,20 +136,68 @@ extension HomeViewController.ViewModel {
             accessToken: accessToken
         )
     }
-    
+
     func loadHomeCounters() async -> HomeCounters {
-        async let friends = loadFriendsCount()
+        if let cachedHomeCounters,
+           let cachedHomeCountersAt,
+           Date().timeIntervalSince(cachedHomeCountersAt) < homeCountersCacheTTL {
+            return cachedHomeCounters
+        }
+
+        async let profile = loadProfileSummary()
         async let groups = loadGroupsCount()
         async let notifications = loadNotificationsCount()
 
-        return await HomeCounters(
-            friendsCount: friends,
-            groupsCount: groups,
-            notificationsCount: notifications
+        let profileSummary = await profile
+        let groupsCount = await groups
+        let notificationsCount = await notifications
+        let counters = HomeCounters(
+            friendsCount: profileSummary.friendsCount,
+            groupsCount: groupsCount,
+            notificationsCount: notificationsCount,
+            streakDays: profileSummary.streakDays,
+            dailyGoalSteps: profileSummary.dailyGoalSteps
         )
+
+        cachedHomeCounters = counters
+        cachedHomeCountersAt = Date()
+        return counters
     }
 
-    private func loadFriendsCount() async -> Int {
+    private func loadProfileSummary() async -> HomeProfileSummary {
+        let route = NetworkRoutes.myProfile
+
+        guard
+            let url = route.url,
+            let accessToken = tokenStorage.get()?.accessToken
+        else {
+            return HomeProfileSummary(friendsCount: 0, streakDays: 0, dailyGoalSteps: nil)
+        }
+
+        do {
+            let profile = try await networkHandler.request(
+                url,
+                responseType: MyProfileDTO.self,
+                httpMethod: route.method.rawValue,
+                accessToken: accessToken
+            )
+
+            return HomeProfileSummary(
+                friendsCount: profile.friendsCount,
+                streakDays: profile.currentStreakDays,
+                dailyGoalSteps: profile.dailyGoalSteps
+            )
+        } catch {
+            print("profile summary loading error:", error)
+            return HomeProfileSummary(
+                friendsCount: await loadFriendsCountFallback(),
+                streakDays: 0,
+                dailyGoalSteps: nil
+            )
+        }
+    }
+
+    private func loadFriendsCountFallback() async -> Int {
         let route = NetworkRoutes.friendsList
 
         guard
@@ -158,7 +217,7 @@ extension HomeViewController.ViewModel {
 
             return friends.count
         } catch {
-            print("friends count loading error:", error)
+            print("friends count fallback loading error:", error)
             return 0
         }
     }

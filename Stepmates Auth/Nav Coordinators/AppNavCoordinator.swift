@@ -446,12 +446,12 @@ extension AppNavCoordinator: SettingsNavDelegate {
     func onBackFromSettings() {
         presenter.popViewController(animated: true)
     }
-    
+
     func onLogoutConfirmed() {
         tokenStorage.delete()
         showLoginScreen()
     }
-    
+
     func onDeleteAccountConfirmed() {
         tokenStorage.delete()
         showLoginScreen()

@@ -19,6 +19,7 @@ final class MapStepsCardView: UIView {
 
     private var bottomConstraint: NSLayoutConstraint?
     private var isCollapsed = false
+    private var previousPlace: Int?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -101,6 +102,14 @@ final class MapStepsCardView: UIView {
         )
 
         rankingButton.setAttributedTitle(rankingText, for: .normal)
+
+        if let previousPlace,
+           let myPlace = ranking.myPlace,
+           previousPlace > myPlace {
+            animateRankRise()
+        }
+
+        previousPlace = ranking.myPlace
     }
 }
 
@@ -202,6 +211,22 @@ private extension MapStepsCardView {
 
     @objc func onRankingButtonTapped() {
         onRankingTap?()
+    }
+
+    func animateRankRise() {
+        rankingButton.transform = CGAffineTransform(translationX: 0, y: 7)
+        rankingButton.alpha = 0.72
+
+        UIView.animate(
+            withDuration: 0.26,
+            delay: 0,
+            usingSpringWithDamping: 0.78,
+            initialSpringVelocity: 0.65,
+            options: [.curveEaseOut, .beginFromCurrentState]
+        ) {
+            self.rankingButton.transform = .identity
+            self.rankingButton.alpha = 1
+        }
     }
 }
 

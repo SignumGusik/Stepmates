@@ -27,9 +27,9 @@ final class LocationService: NSObject {
     }
     
     private func configureManager() {
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = 5
-        manager.activityType = .fitness
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter = 3
+        manager.activityType = .otherNavigation
         manager.pausesLocationUpdatesAutomatically = false
     }
     

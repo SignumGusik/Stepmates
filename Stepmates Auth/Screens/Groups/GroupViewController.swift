@@ -26,6 +26,18 @@ final class GroupViewController: UIViewController {
             case .month: return "За месяц"
             }
         }
+
+        var goalMultiplier: Int {
+            switch self {
+            case .today:
+                return 1
+            case .week:
+                return 7
+            case .month:
+                let range = Calendar.current.range(of: .day, in: .month, for: Date())
+                return range?.count ?? 30
+            }
+        }
     }
 
     weak var navDelegate: GroupNavDelegate?
@@ -315,7 +327,7 @@ private extension GroupViewController {
                 }
 
                 let total = self.viewModel.totalSteps(from: leaderboard)
-                let goal = self.viewModel.goalSteps(detail: detail)
+                let goal = self.viewModel.goalSteps(detail: detail) * self.selectedPeriod.goalMultiplier
                 self.stepsProgressLabel.attributedText = Self.makeProgressText(
                     total: total,
                     goal: goal

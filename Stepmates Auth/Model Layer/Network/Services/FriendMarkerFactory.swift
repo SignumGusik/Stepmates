@@ -23,6 +23,13 @@ enum FriendMarkerFactory {
         makeLabeledFallbackImage(username: username, size: 64, ringColor: ringColor)
     }
 
+    static func makeCurrentUserLiveAvatarImage(
+        _ avatar: UIImage,
+        ringColor: UIColor = Constants.orange ?? .systemOrange
+    ) -> UIImage {
+        makeAvatarBubbleImage(avatar, size: 64, ringColor: ringColor)
+    }
+
     static func makeFriendLiveFallbackImage(username: String) -> UIImage {
         makeLabeledFallbackImage(username: username, size: 58, ringColor: Constants.purple ?? .systemBlue)
     }
@@ -179,6 +186,30 @@ private extension FriendMarkerFactory {
                 y: size + labelTop,
                 height: labelHeight
             )
+        }
+    }
+
+    static func makeAvatarBubbleImage(
+        _ avatar: UIImage,
+        size: CGFloat,
+        ringColor: UIColor
+    ) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+
+        return renderer.image { _ in
+            let circleRect = CGRect(x: 0, y: 0, width: size, height: size)
+
+            ringColor.setFill()
+            UIBezierPath(ovalIn: circleRect).fill()
+
+            let whiteRingRect = circleRect.insetBy(dx: 4, dy: 4)
+            UIColor.white.setFill()
+            UIBezierPath(ovalIn: whiteRingRect).fill()
+
+            let imageRect = whiteRingRect.insetBy(dx: 5, dy: 5)
+            let imagePath = UIBezierPath(ovalIn: imageRect)
+            imagePath.addClip()
+            avatar.draw(in: imageRect)
         }
     }
 

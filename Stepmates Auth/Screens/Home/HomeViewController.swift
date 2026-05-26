@@ -18,7 +18,7 @@ protocol HomeNavDelegate: AnyObject {
 }
 
 class HomeViewController: UIViewController {
-    
+
     private let starsView = StarsBackgroundView()
     private lazy var infoText = UITextView.makeTextField()
     private lazy var fetchDataButton = UIButton.makeButton(title: "Fetch Secure Data", target: self, action: #selector(self.onFetchTapped))
@@ -40,20 +40,48 @@ class HomeViewController: UIViewController {
         target: self,
         action: #selector(onGroupsTapped)
     )
-    
+
     private lazy var planetButton = UIButton.makeImageButton(
         imageName: "planet",
         target: self,
         action: #selector(onPlanetTapped)
     )
-    
-    
+
+
     private lazy var statsButtonsStack = UIStackView.makeHomeStatsButtonsStack(
         arrangedSubviews: [groupsButton, friendsButton]
     )
     private lazy var todayLabel = UILabel.makeManrope(text: "Сегодня:", style: Constants.manropeMedium, size: 16)
     private lazy var stepsLabel = UILabel.makeManrope(text: "0 шагов", style: Constants.manropeBold, size: 40, color: Constants.blue ?? .systemBlue)
     private lazy var goalLabel = UILabel.makeManrope(text: "Цель: 10 000", style: Constants.manropeExtraBold, size: 20, color: Constants.orange ?? .orange)
+    private lazy var streakBadgeLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "0 дней"
+        label.textAlignment = .center
+        label.textColor = .white
+        label.backgroundColor = Constants.orange ?? .orange
+        label.font = UIFont(name: Constants.manropeExtraBold, size: 13)
+            ?? .systemFont(ofSize: 13, weight: .heavy)
+        label.layer.cornerRadius = 13
+        label.clipsToBounds = true
+        label.alpha = 0
+        return label
+    }()
+    private lazy var goalCompletedBadgeLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "Цель выполнена"
+        label.textAlignment = .center
+        label.textColor = .white
+        label.backgroundColor = Constants.orange ?? .orange
+        label.font = UIFont(name: Constants.manropeExtraBold, size: 14)
+            ?? .systemFont(ofSize: 14, weight: .heavy)
+        label.layer.cornerRadius = 14
+        label.clipsToBounds = true
+        label.alpha = 0
+        return label
+    }()
     private let goalRowView = UIView()
     private lazy var editGoalButton = UIButton.makeImageButton(
         imageName: "editGroupPageBtn",
@@ -63,7 +91,7 @@ class HomeViewController: UIViewController {
 
     private let progressBar = GoalProgressView()
     private let statsCard = UIView()
-    
+
     private var steps: CGFloat = 0
     private var dailyGoal = 10000
     private var goal: CGFloat {
@@ -119,7 +147,7 @@ class HomeViewController: UIViewController {
         button.addTarget(self, action: #selector(onGoalSaveTapped), for: .touchUpInside)
         return button
     }()
-    
+
     private lazy var notificationsButton = UIButton.makeRoundIconButton(
         imageName: "notifications",
         target: self,
@@ -144,7 +172,7 @@ class HomeViewController: UIViewController {
     private lazy var topButtonsStack = UIStackView.makeHomeTopRightButtonsStack(
         arrangedSubviews: [notificationsButton, settingsButton]
     )
-    
+
     private var concellables = Set<AnyCancellable>()
     private var observers: [NSObjectProtocol] = []
     private var goalRowHeightConstraint: NSLayoutConstraint?
@@ -153,28 +181,35 @@ class HomeViewController: UIViewController {
     private var isHomeVisible = false
     private var lastSyncedSteps: Int?
     private var lastStepsSyncAt: Date?
-    
+    private var displayedSteps = 0
+    private var stepCounterDisplayLink: CADisplayLink?
+    private var stepCounterStartValue = 0
+    private var stepCounterTargetValue = 0
+    private var stepCounterStartedAt = Date()
+    private let stepCounterDuration: TimeInterval = 0.34
+
     weak var navDelegate: HomeNavDelegate?
     private let viewModel: ViewModel
     required init(viewModel: ViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
-    
+
     required init?(coder: NSCoder) {
         preconditionFailure("init(coder:) not used")
     }
-    
+
     deinit {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
+        stepCounterDisplayLink?.invalidate()
         StepCountProvider.shared.stop()
     }
-    
+
 }
 
 // MARK: - Lifecycle
 extension HomeViewController {
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.backButtonDisplayMode = .minimal
@@ -203,10 +238,10 @@ extension HomeViewController {
 
 // MARK: - View Setup/Configuration
 private extension HomeViewController {
-    
+
     func setupViews() {
         title = "Home"
-        
+
         starsView.translatesAutoresizingMaskIntoConstraints = false
         starsView.addTo(view)
                 .pinTop(toAnchor: view.topAnchor, constant: 0)
@@ -215,7 +250,7 @@ private extension HomeViewController {
                 .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
 
         view.sendSubviewToBack(starsView)
-        
+
         topButtonsStack
             .addTo(view)
             .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: 12)
@@ -229,21 +264,21 @@ private extension HomeViewController {
 
         settingsButton.setContentHuggingPriority(.required, for: .vertical)
         settingsButton.setContentCompressionResistancePriority(.required, for: .vertical)
-        
+
         notificationsDotView
             .addTo(notificationsButton)
             .pinTop(toAnchor: notificationsButton.topAnchor, constant: 8)
             .pinRight(toAnchor: notificationsButton.rightAnchor, constant: -8)
             .setSize(width: 10, height: 10)
-    
-        
+
+
         planetButton
             .addTo(view)
             .pinTop(toAnchor: settingsButton.bottomAnchor)
             .centerXOn(view)
             .setWidth(310)
             .setHeight(310)
-        
+
         statsCard.translatesAutoresizingMaskIntoConstraints = false
         statsCard.backgroundColor = Constants.lightPurple
         statsCard.layer.cornerRadius = 20
@@ -255,11 +290,17 @@ private extension HomeViewController {
             .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 10)
             .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -10)
             .setHeight(280)
-        
+
         todayLabel
             .addTo(statsCard)
             .pinTop(toAnchor: statsCard.topAnchor, constant: 16)
             .pinLeft(toAnchor: statsCard.leftAnchor, constant: 20)
+
+        streakBadgeLabel
+            .addTo(statsCard)
+            .pinRight(toAnchor: statsCard.rightAnchor, constant: -18)
+            .centerYOn(todayLabel)
+            .setSize(width: 92, height: 26)
 
         stepsLabel
             .addTo(statsCard)
@@ -307,17 +348,24 @@ private extension HomeViewController {
             .pinLeft(toAnchor: statsCard.leftAnchor, constant: 20)
             .pinRight(toAnchor: statsCard.rightAnchor, constant: -16)
             .setHeight(8)
-        
+
 
         progressBar.setProgress(steps / goal, animated: false)
-        
+
         statsButtonsStack
             .addTo(statsCard)
             .pinTop(toAnchor: progressBar.bottomAnchor, constant: 22)
             .pinLeft(toAnchor: statsCard.leftAnchor, constant: 10)
             .pinRight(toAnchor: statsCard.rightAnchor, constant: -10)
             .setHeight(90)
-        
+
+        goalCompletedBadgeLabel
+            .addTo(statsCard)
+            .pinTop(toAnchor: progressBar.bottomAnchor, constant: 5)
+            .centerXOn(statsCard)
+            .setSize(width: 158, height: 28)
+        statsCard.bringSubviewToFront(goalCompletedBadgeLabel)
+
     }
 
     func setupGoalEditor() {
@@ -427,54 +475,54 @@ private extension HomeViewController {
             .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -22)
             .setHeight(46)
     }
-    
+
     private func setupNavBar() {
         navigationItem.backButtonDisplayMode = .minimal
-        
+
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
         appearance.backgroundColor = .clear
         appearance.shadowColor = .clear
         appearance.shadowImage = UIImage()
-        
+
         appearance.titleTextAttributes = [
             .foregroundColor: UIColor.white
         ]
-        
+
         if let backImage = UIImage(named: "backArrow")?.withRenderingMode(.alwaysOriginal) {
             appearance.setBackIndicatorImage(backImage, transitionMaskImage: backImage)
         }
-        
+
         appearance.backButtonAppearance.normal.titleTextAttributes = [
             .foregroundColor: UIColor.clear
         ]
         appearance.backButtonAppearance.highlighted.titleTextAttributes = [
             .foregroundColor: UIColor.clear
         ]
-        
+
         let navBar = navigationController?.navigationBar
         navBar?.isTranslucent = true
         navBar?.setBackgroundImage(UIImage(), for: .default)
         navBar?.shadowImage = UIImage()
         navBar?.backgroundColor = .clear
-        
+
         navBar?.standardAppearance = appearance
         navBar?.scrollEdgeAppearance = appearance
         navBar?.compactAppearance = appearance
         navBar?.tintColor = .clear
     }
-    
+
 }
 // MARK: -Observers
 private extension HomeViewController {
     func setupObservers() {
-        
+
         viewModel.$infoText
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newText in
                 self?.infoText.text = newText }.store(in: &concellables)
     }
-    
+
     func setupAppStateObservers() {
         let observer = NotificationCenter.default.addObserver(
             forName: UIApplication.willEnterForegroundNotification,
@@ -489,7 +537,7 @@ private extension HomeViewController {
             self.loadTodayStepsState()
             self.setupStepCounting()
         }
-        
+
         observers.append(observer)
 
         let backgroundObserver = NotificationCenter.default.addObserver(
@@ -507,7 +555,7 @@ private extension HomeViewController {
 
         observers.append(backgroundObserver)
     }
-    
+
 }
 
 private extension HomeViewController {
@@ -532,7 +580,7 @@ private extension HomeViewController {
             }
         }
     }
-    
+
     func loadTodaySteps() {
         guard isStepCountingReady else {
             return
@@ -545,11 +593,8 @@ private extension HomeViewController {
         isStepCountingReady = true
         isHealthAccessActionEnabled = false
 
-        let stepsValue = CGFloat(snapshot.steps)
-        steps = stepsValue
-        stepsLabel.text = "\(snapshot.steps) шагов"
+        applyStepsValue(snapshot.steps, animated: true, celebrate: true)
         setGoalText(goalText(), isAction: false)
-        progressBar.setProgress(min(stepsValue / goal, 1), animated: true)
 
         syncStepsIfNeeded(snapshot.steps)
     }
@@ -561,8 +606,7 @@ private extension HomeViewController {
     }
 
     func showStepsUnavailableState(message: String) {
-        steps = 0
-        stepsLabel.text = "0 шагов"
+        applyStepsValue(0, animated: false, celebrate: false)
         isHealthAccessActionEnabled = true
         setGoalText(message, isAction: true)
         progressBar.setProgress(0, animated: true)
@@ -591,7 +635,7 @@ private extension HomeViewController {
             guard let goalSteps = response?.goalSteps else { return }
 
             await MainActor.run {
-                self.applyDailyGoal(goalSteps, animated: true)
+                self.applyDailyGoal(goalSteps, animated: true, celebrateIfCompleted: false)
             }
         }
     }
@@ -629,7 +673,8 @@ private extension HomeViewController {
         progressBar.setProgress(min(steps / goal, 1), animated: animated)
     }
 
-    func applyDailyGoal(_ goal: Int, animated: Bool) {
+    func applyDailyGoal(_ goal: Int, animated: Bool, celebrateIfCompleted: Bool = true) {
+        let wasCompleted = Int(steps) >= dailyGoal
         dailyGoal = max(1000, min(100000, goal))
         guard isHealthAccessActionEnabled == false else {
             return
@@ -637,6 +682,10 @@ private extension HomeViewController {
 
         setGoalText(goalText(), isAction: false)
         updateProgress(animated: animated)
+
+        if celebrateIfCompleted, !wasCompleted, Int(steps) >= dailyGoal {
+            showGoalCompletedAnimation()
+        }
     }
 
     func loadTodayStepsState() {
@@ -646,14 +695,92 @@ private extension HomeViewController {
 
             await MainActor.run {
                 if let goalSteps = state?.goalSteps {
-                    self.applyDailyGoal(goalSteps, animated: false)
+                    self.applyDailyGoal(goalSteps, animated: false, celebrateIfCompleted: false)
                 }
 
                 if let todaySteps = state?.steps, todaySteps > Int(self.steps) {
-                    self.steps = CGFloat(todaySteps)
-                    self.stepsLabel.text = "\(todaySteps) шагов"
-                    self.updateProgress(animated: false)
+                    self.applyStepsValue(todaySteps, animated: false, celebrate: false)
                 }
+            }
+        }
+    }
+
+    func applyStepsValue(_ value: Int, animated: Bool, celebrate: Bool) {
+        let wasCompleted = Int(steps) >= dailyGoal
+        let normalizedValue = max(0, value)
+
+        steps = CGFloat(normalizedValue)
+        setStepCounterValue(normalizedValue, animated: animated)
+        updateProgress(animated: animated)
+
+        if celebrate, !wasCompleted, normalizedValue >= dailyGoal {
+            showGoalCompletedAnimation()
+        }
+    }
+
+    func setStepCounterValue(_ value: Int, animated: Bool) {
+        stepCounterDisplayLink?.invalidate()
+        stepCounterDisplayLink = nil
+
+        guard animated, displayedSteps != value else {
+            displayedSteps = value
+            stepsLabel.text = "\(formatSteps(value)) шагов"
+            return
+        }
+
+        stepCounterStartValue = displayedSteps
+        stepCounterTargetValue = value
+        stepCounterStartedAt = Date()
+
+        let displayLink = CADisplayLink(target: self, selector: #selector(onStepCounterFrame))
+        displayLink.add(to: .main, forMode: .common)
+        stepCounterDisplayLink = displayLink
+    }
+
+    @objc func onStepCounterFrame() {
+        let elapsed = Date().timeIntervalSince(stepCounterStartedAt)
+        let progress = min(elapsed / stepCounterDuration, 1)
+        let eased = 1 - pow(1 - progress, 3)
+        let delta = Double(stepCounterTargetValue - stepCounterStartValue)
+        let value = stepCounterStartValue + Int((delta * eased).rounded())
+
+        displayedSteps = value
+        stepsLabel.text = "\(formatSteps(value)) шагов"
+
+        if progress >= 1 {
+            displayedSteps = stepCounterTargetValue
+            stepsLabel.text = "\(formatSteps(stepCounterTargetValue)) шагов"
+            stepCounterDisplayLink?.invalidate()
+            stepCounterDisplayLink = nil
+        }
+    }
+
+    func showGoalCompletedAnimation() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        progressBar.flashSuccess()
+
+        goalCompletedBadgeLabel.layer.removeAllAnimations()
+        goalCompletedBadgeLabel.alpha = 0
+        goalCompletedBadgeLabel.transform = CGAffineTransform(translationX: 0, y: 10)
+            .scaledBy(x: 0.96, y: 0.96)
+
+        UIView.animate(
+            withDuration: 0.24,
+            delay: 0,
+            usingSpringWithDamping: 0.78,
+            initialSpringVelocity: 0.6,
+            options: [.curveEaseOut, .beginFromCurrentState]
+        ) {
+            self.goalCompletedBadgeLabel.alpha = 1
+            self.goalCompletedBadgeLabel.transform = .identity
+        } completion: { _ in
+            UIView.animate(
+                withDuration: 0.20,
+                delay: 1.1,
+                options: [.curveEaseIn, .beginFromCurrentState]
+            ) {
+                self.goalCompletedBadgeLabel.alpha = 0
+                self.goalCompletedBadgeLabel.transform = CGAffineTransform(translationX: 0, y: -8)
             }
         }
     }
@@ -767,7 +894,7 @@ private extension HomeViewController {
             goalEditorHintLabel.textColor = Constants.orange ?? .orange
         }
     }
-    
+
     func loadHomeCounters() {
         Task { [weak self] in
             guard let self else { return }
@@ -781,6 +908,10 @@ private extension HomeViewController {
     }
 
     func updateHomeCounters(_ counters: HomeCounters) {
+        if let dailyGoalSteps = counters.dailyGoalSteps {
+            applyDailyGoal(dailyGoalSteps, animated: false, celebrateIfCompleted: false)
+        }
+
         updateHomeInfoButton(
             friendsButton,
             title: "Друзья",
@@ -794,6 +925,21 @@ private extension HomeViewController {
         )
 
         notificationsDotView.isHidden = counters.notificationsCount == 0
+        updateStreakBadge(days: counters.streakDays)
+    }
+
+    func updateStreakBadge(days: Int) {
+        let safeDays = max(0, days)
+        streakBadgeLabel.text = "\(safeDays) \(daysWord(safeDays))"
+        streakBadgeLabel.alpha = safeDays > 0 ? 1 : 0.72
+
+        UIView.animate(
+            withDuration: 0.20,
+            delay: 0,
+            options: [.curveEaseOut, .beginFromCurrentState]
+        ) {
+            self.streakBadgeLabel.transform = safeDays > 0 ? .identity : CGAffineTransform(scaleX: 0.96, y: 0.96)
+        }
     }
 
     func updateHomeInfoButton(_ button: UIButton, title: String, subtitle: String) {
@@ -851,6 +997,92 @@ private extension HomeViewController {
 
         return "групп"
     }
+
+    func daysWord(_ count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+
+        if mod10 == 1 && mod100 != 11 {
+            return "день"
+        }
+
+        if (2...4).contains(mod10) && !(12...14).contains(mod100) {
+            return "дня"
+        }
+
+        return "дней"
+    }
+
+    func animateTap(
+        on targetView: UIView,
+        scale: CGFloat = 0.94,
+        completion: @escaping () -> Void
+    ) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        UIView.animate(
+            withDuration: 0.10,
+            delay: 0,
+            options: [.curveEaseOut, .beginFromCurrentState]
+        ) {
+            targetView.transform = CGAffineTransform(scaleX: scale, y: scale)
+        } completion: { _ in
+            UIView.animate(
+                withDuration: 0.16,
+                delay: 0,
+                usingSpringWithDamping: 0.72,
+                initialSpringVelocity: 0.7,
+                options: [.curveEaseOut, .beginFromCurrentState]
+            ) {
+                targetView.transform = .identity
+            } completion: { _ in
+                completion()
+            }
+        }
+    }
+
+    func animatePlanetTransition(completion: @escaping () -> Void) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        UIView.animate(
+            withDuration: 0.16,
+            delay: 0,
+            options: [.curveEaseOut, .beginFromCurrentState]
+        ) {
+            self.planetButton.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
+            self.starsView.alpha = 0.68
+        } completion: { _ in
+            completion()
+            UIView.animate(withDuration: 0.18, delay: 0.04, options: [.curveEaseOut]) {
+                self.planetButton.transform = .identity
+                self.starsView.alpha = 1
+            }
+        }
+    }
+
+    func animateNotificationsTransition(completion: @escaping () -> Void) {
+        UIView.animate(
+            withDuration: 0.10,
+            delay: 0,
+            options: [.curveEaseOut, .beginFromCurrentState]
+        ) {
+            self.notificationsButton.transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
+            self.notificationsDotView.alpha = 0
+        } completion: { _ in
+            UIView.animate(
+                withDuration: 0.16,
+                delay: 0,
+                usingSpringWithDamping: 0.74,
+                initialSpringVelocity: 0.7,
+                options: [.curveEaseOut, .beginFromCurrentState]
+            ) {
+                self.notificationsButton.transform = .identity
+            } completion: { _ in
+                completion()
+                self.notificationsDotView.alpha = 1
+            }
+        }
+    }
 }
 
 // MARK: - Actions
@@ -859,7 +1091,7 @@ private extension HomeViewController {
         Task {
             do {
                 try await viewModel.fetchSecureData()
-                
+
             } catch {
                 await MainActor.run {
                     [weak self] in
@@ -867,7 +1099,7 @@ private extension HomeViewController {
                 }
             }
         }
-        
+
     }
     @objc func onResetTextTapped() {
         viewModel.resetInfoText()
@@ -876,10 +1108,14 @@ private extension HomeViewController {
         navDelegate?.onLogoutTapped()
     }
     @objc func onFriendsTapped() {
-        navDelegate?.onFriendsTapped()
+        animateTap(on: friendsButton) { [weak self] in
+            self?.navDelegate?.onFriendsTapped()
+        }
     }
     @objc func onNotificationsTapped() {
-        navDelegate?.onNotificationsTapped()
+        animateNotificationsTransition { [weak self] in
+            self?.navDelegate?.onNotificationsTapped()
+        }
     }
     @objc func onStepsPermissionTapped() {
         guard isHealthAccessActionEnabled else {
@@ -921,9 +1157,7 @@ private extension HomeViewController {
                     self.applyDailyGoal(response.dailyGoalSteps, animated: true)
 
                     if let todaySteps = response.todaySteps {
-                        self.steps = CGFloat(todaySteps)
-                        self.stepsLabel.text = "\(todaySteps) шагов"
-                        self.updateProgress(animated: true)
+                        self.applyStepsValue(todaySteps, animated: true, celebrate: response.isGoalCompleted == true)
                     }
 
                     self.hideGoalEditor()
@@ -940,12 +1174,19 @@ private extension HomeViewController {
         }
     }
     @objc private func onGroupsTapped() {
-        navDelegate?.onGroupsTapped()
+        animateTap(on: groupsButton) { [weak self] in
+            self?.navDelegate?.onGroupsTapped()
+        }
     }
     @objc private func onPlanetTapped() {
-        navDelegate?.onMapTapped()
+        animatePlanetTransition { [weak self] in
+            self?.navDelegate?.onMapTapped()
+        }
     }
     @objc private func onSettingsTapped() {
-        navDelegate?.onSettingsTapped(username: viewModel.username)
+        animateTap(on: settingsButton) { [weak self] in
+            guard let self else { return }
+            self.navDelegate?.onSettingsTapped(username: self.viewModel.username)
+        }
     }
 }
