@@ -95,12 +95,13 @@ extension FriendsViewController {
         super.viewDidLoad()
         setupViews()
         setupDropdown()
+        applyCachedData()
         loadData()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        loadData(force: true)
+        loadData()
     }
 }
 
@@ -213,34 +214,59 @@ private extension FriendsViewController {
         }
 
         isLoadingData = true
+        let period = selectedPeriod
         Task { [weak self] in
             guard let self else { return }
-            let result = await viewModel.getLeaderboardItems(period: selectedPeriod)
+            let result = await viewModel.getLeaderboardItems(period: period, force: force || isRefreshing)
 
             await MainActor.run {
                 self.isLoadingData = false
+                guard self.selectedPeriod == period else {
+                    self.refreshControl.endRefreshing()
+                    return
+                }
+
                 self.lastDataLoadAt = Date()
-                let movedUpUserIds = Set(
-                    result.compactMap { item -> Int? in
-                        guard let previousPlace = self.previousPlacesByUserID[item.userId],
-                              previousPlace > item.place else {
-                            return nil
-                        }
-
-                        return item.userId
-                    }
-                )
-
-                AvatarLoader.shared.prefetch(urlStrings: result.compactMap(\.avatarUrl))
-                self.items = result
-                self.tableView.reloadData()
-                self.previousPlacesByUserID = Dictionary(
-                    uniqueKeysWithValues: result.map { ($0.userId, $0.place) }
-                )
-                self.animateMovedUpRows(userIds: movedUpUserIds)
+                self.applyLeaderboard(result, animateMovedUp: true)
                 self.refreshControl.endRefreshing()
             }
         }
+    }
+
+    func applyCachedData(clearIfMissing: Bool = false) {
+        let cached = viewModel.cachedLeaderboardSnapshot(period: selectedPeriod)
+        guard cached.isEmpty == false else {
+            if clearIfMissing {
+                items = []
+                previousPlacesByUserID = [:]
+                tableView.reloadData()
+            }
+            return
+        }
+
+        applyLeaderboard(cached, animateMovedUp: false)
+    }
+
+    func applyLeaderboard(_ result: [FriendLeaderboardItem], animateMovedUp: Bool) {
+        let movedUpUserIds = Set(
+            result.compactMap { item -> Int? in
+                guard animateMovedUp,
+                      let previousPlace = previousPlacesByUserID[item.userId],
+                      previousPlace > item.place else {
+                    return nil
+                }
+
+                return item.userId
+            }
+        )
+
+        AvatarLoader.shared.prefetch(urlStrings: result.compactMap(\.avatarUrl))
+        items = result
+        tableView.reloadData()
+        previousPlacesByUserID = Dictionary(
+            uniqueKeysWithValues: result.map { ($0.userId, $0.place) }
+        )
+        animateMovedUpRows(userIds: movedUpUserIds)
     }
 
     func animateMovedUpRows(userIds: Set<Int>) {
@@ -395,7 +421,8 @@ extension FriendsViewController: UITableViewDataSource, UITableViewDelegate {
             periodView.setTitle(period.title)
 
             hideDropdown()
-            loadData(force: true)
+            applyCachedData(clearIfMissing: true)
+            loadData()
             return
         }
         tableView.deselectRow(at: indexPath, animated: true)

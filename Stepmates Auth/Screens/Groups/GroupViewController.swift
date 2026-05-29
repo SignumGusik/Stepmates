@@ -46,6 +46,7 @@ final class GroupViewController: UIViewController {
     private var items: [GroupLeaderboardItem] = []
     private let refreshControl = UIRefreshControl()
     private var selectedPeriod: LeaderboardPeriod = .today
+    private var isLoadingData = false
 
     private let avatarImageView = UIView.makeAvatarImageView(size: 80)
 
@@ -165,6 +166,7 @@ extension GroupViewController {
         super.viewDidLoad()
         setupViews()
         setupDropdown()
+        applyCachedData()
         loadData()
     }
 }
@@ -304,36 +306,81 @@ private extension GroupViewController {
         dropdownHeightConstraint?.isActive = true
     }
 
-    func loadData() {
+    func applyCachedData(clearIfMissing: Bool = false) {
+        let detail = viewModel.cachedGroupDetailSnapshot()
+        let leaderboard = viewModel.cachedLeaderboardSnapshot(period: selectedPeriod)
+
+        guard detail != nil || leaderboard.isEmpty == false else {
+            if clearIfMissing {
+                applyData(detail: nil, leaderboard: [], period: selectedPeriod)
+            } else {
+                updateProgress(detail: nil, leaderboard: items, period: selectedPeriod)
+            }
+            return
+        }
+
+        applyData(detail: detail, leaderboard: leaderboard, period: selectedPeriod)
+    }
+
+    func loadData(force: Bool = false) {
+        guard isLoadingData == false else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        isLoadingData = true
+        let period = selectedPeriod
+
         Task { [weak self] in
             guard let self else { return }
 
-            async let detailTask = viewModel.getGroupDetail()
-            async let leaderboardTask = viewModel.getLeaderboard(period: selectedPeriod)
+            async let detailTask = viewModel.getGroupDetail(force: force)
+            async let leaderboardTask = viewModel.getLeaderboard(period: period, force: force)
 
             let detail = await detailTask
             let leaderboard = await leaderboardTask
 
             await MainActor.run {
-                self.items = leaderboard
-                self.tableView.reloadData()
+                self.isLoadingData = false
                 self.refreshControl.endRefreshing()
-
-                if let detail {
-                    self.membersValueLabel.text = "\(detail.members.count)"
-                    if let myPlace = self.items.first(where: { $0.isCurrentUser })?.place {
-                        self.myPlaceValueLabel.text = "\(myPlace)"
-                    }
-                }
-
-                let total = self.viewModel.totalSteps(from: leaderboard)
-                let goal = self.viewModel.goalSteps(detail: detail) * self.selectedPeriod.goalMultiplier
-                self.stepsProgressLabel.attributedText = Self.makeProgressText(
-                    total: total,
-                    goal: goal
-                )
+                guard self.selectedPeriod == period else { return }
+                self.applyData(detail: detail, leaderboard: leaderboard, period: period)
             }
         }
+    }
+
+    func applyData(
+        detail: GroupDetailResponse?,
+        leaderboard: [GroupLeaderboardItem],
+        period: LeaderboardPeriod
+    ) {
+        items = leaderboard
+        tableView.reloadData()
+
+        if let detail {
+            membersValueLabel.text = "\(detail.membersCount ?? detail.members.count)"
+        }
+
+        if let myPlace = items.first(where: { $0.isCurrentUser })?.place {
+            myPlaceValueLabel.text = "\(myPlace)"
+        } else {
+            myPlaceValueLabel.text = viewModel.group.myPlace.map { "\($0)" } ?? "-"
+        }
+
+        updateProgress(detail: detail, leaderboard: leaderboard, period: period)
+    }
+
+    func updateProgress(
+        detail: GroupDetailResponse?,
+        leaderboard: [GroupLeaderboardItem],
+        period: LeaderboardPeriod
+    ) {
+        let total = viewModel.totalSteps(from: leaderboard)
+        let goal = viewModel.goalSteps(detail: detail) * period.goalMultiplier
+        stepsProgressLabel.attributedText = Self.makeProgressText(
+            total: total,
+            goal: goal
+        )
     }
 
     func loadGroupAvatar(_ avatarUrl: String?) {
@@ -402,7 +449,7 @@ private extension GroupViewController {
         hideDropdown()
     }
     @objc func onRefresh() {
-        loadData()
+        loadData(force: true)
     }
 }
 
@@ -501,6 +548,7 @@ extension GroupViewController: UITableViewDataSource, UITableViewDelegate {
             periodView.setTitle(selectedPeriod.title)
 
             hideDropdown()
+            applyCachedData(clearIfMissing: true)
             loadData()
             return
         }

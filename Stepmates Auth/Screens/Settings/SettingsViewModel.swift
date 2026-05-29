@@ -15,8 +15,9 @@ extension SettingsViewController {
         private let networkHandler: NetworkHandler
         private let tokenStorage: AccessTokenStorage
 
-        private let avatarFileName = "avatar.jpg"
-        private let avatarUrlKey = "profile.avatar_url"
+        private let profileCacheTTL: TimeInterval = 60
+        private let profileCacheDateKeySuffix = ".updated_at"
+        private let avatarUrlKeyPrefix = "profile.avatar_url"
         private(set) var profile: MyProfileDTO?
 
         init(username: String,
@@ -43,9 +44,21 @@ extension SettingsViewController {
         }
 
         // MARK: - Local storage
+        private var accountCacheKey: String {
+            let rawKey = tokenStorage.get()?.refreshToken ?? username
+            let accountKey = Data(rawKey.utf8)
+                .base64EncodedString()
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "=", with: "")
+                .prefix(36)
+
+            return String(accountKey)
+        }
+
         private var localAvatarURL: URL? {
             let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            return dir?.appendingPathComponent(avatarFileName)
+            return dir?.appendingPathComponent("avatar-\(accountCacheKey).jpg")
         }
 
         func saveAvatarImage(_ image: UIImage) {
@@ -66,15 +79,65 @@ extension SettingsViewController {
         }
 
         private func saveAvatarUrlToCache(_ url: String?) {
-            UserDefaults.standard.setValue(url, forKey: avatarUrlKey)
+            if let url {
+                UserDefaults.standard.set(url, forKey: avatarUrlKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: avatarUrlKey)
+            }
         }
 
         func cachedAvatarUrl() -> String? {
             UserDefaults.standard.string(forKey: avatarUrlKey)
         }
 
+        func cachedProfileSnapshot() -> MyProfileDTO? {
+            if let profile {
+                return profile
+            }
+
+            guard
+                let data = UserDefaults.standard.data(forKey: profileCacheKey),
+                let profile = try? JSONDecoder().decode(MyProfileDTO.self, from: data)
+            else {
+                return nil
+            }
+
+            self.profile = profile
+            return profile
+        }
+
+        private var profileCacheKey: String {
+            "settings.profile.\(accountCacheKey)"
+        }
+
+        private var profileCacheDateKey: String {
+            profileCacheKey + profileCacheDateKeySuffix
+        }
+
+        private var avatarUrlKey: String {
+            "\(avatarUrlKeyPrefix).\(accountCacheKey)"
+        }
+
+        private func saveProfileSnapshot(_ profile: MyProfileDTO) {
+            self.profile = profile
+
+            if let data = try? JSONEncoder().encode(profile) {
+                UserDefaults.standard.set(data, forKey: profileCacheKey)
+                UserDefaults.standard.set(Date(), forKey: profileCacheDateKey)
+            }
+
+            saveAvatarUrlToCache(profile.avatarUrl)
+        }
+
         // MARK: - Server
-        func fetchMyProfile() async throws -> MyProfileDTO {
+        func fetchMyProfile(force: Bool = false) async throws -> MyProfileDTO {
+            if !force,
+               let cached = cachedProfileSnapshot(),
+               let cachedAt = UserDefaults.standard.object(forKey: profileCacheDateKey) as? Date,
+               Date().timeIntervalSince(cachedAt) < profileCacheTTL {
+                return cached
+            }
+
             let route = NetworkRoutes.myProfile
 
             guard let url = route.url else {
@@ -92,19 +155,24 @@ extension SettingsViewController {
                 accessToken: token
             )
 
-            self.profile = profile
-            saveAvatarUrlToCache(profile.avatarUrl)
+            saveProfileSnapshot(profile)
 
             return profile
         }
-        func syncAvatarIfNeeded() async throws -> UIImage? {
-            let profile = try await fetchMyProfile()
-            saveAvatarUrlToCache(profile.avatarUrl)
+        func syncAvatarIfNeeded(profile: MyProfileDTO? = nil) async throws -> UIImage? {
+            let resolvedProfile: MyProfileDTO
+            if let profile {
+                resolvedProfile = profile
+            } else {
+                resolvedProfile = try await fetchMyProfile()
+            }
+
+            saveAvatarUrlToCache(resolvedProfile.avatarUrl)
             if let local = loadAvatarImage() {
                 return local
             }
 
-            guard let urlString = profile.avatarUrl else {
+            guard let urlString = resolvedProfile.avatarUrl else {
                 return nil
             }
 
@@ -132,6 +200,7 @@ extension SettingsViewController {
                 accessToken: token
             )
 
+            saveAvatarImage(image)
             saveAvatarUrlToCache(resp.avatarUrl)
             return resp.avatarUrl
         }
@@ -174,7 +243,7 @@ extension SettingsViewController {
                 accessToken: token
             )
 
-            return try await fetchMyProfile()
+            return try await fetchMyProfile(force: true)
         }
     }
 }

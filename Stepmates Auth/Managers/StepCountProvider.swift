@@ -162,6 +162,7 @@ final class StepSyncManager {
 struct StepCountSnapshot {
     let steps: Int
     let source: StepCountSource
+    let date: Date
 }
 
 final class StepCountProvider {
@@ -172,8 +173,10 @@ final class StepCountProvider {
     private var onUnavailable: ((String) -> Void)?
     private var lastHealthKitError: Error?
     private var lastPedometerSteps = 0
+    private var lastPedometerDate: Date?
     private var lastPublishedSteps = 0
     private var lastPublishedSource: StepCountSource?
+    private var lastPublishedDate: Date?
     private var isPedometerRunning = false
     private var livePedometerStartedAt: Date?
     private var canUseHealthKit = false
@@ -184,6 +187,7 @@ final class StepCountProvider {
         onUpdate: @escaping (StepCountSnapshot) -> Void,
         onUnavailable: @escaping (String) -> Void
     ) {
+        resetDailyCachesIfNeeded()
         self.onUpdate = onUpdate
         self.onUnavailable = onUnavailable
         lastPublishedSource = nil
@@ -192,6 +196,8 @@ final class StepCountProvider {
     }
 
     func refresh() {
+        resetDailyCachesIfNeeded()
+
         if shouldSkipHealthKit {
             refreshPedometerOnly()
             return
@@ -206,8 +212,18 @@ final class StepCountProvider {
     }
 
     func cachedSnapshot() -> StepCountSnapshot? {
-        guard let lastPublishedSource else { return nil }
-        return StepCountSnapshot(steps: lastPublishedSteps, source: lastPublishedSource)
+        guard let lastPublishedSource,
+              let lastPublishedDate,
+              isSameLocalDay(lastPublishedDate)
+        else {
+            return nil
+        }
+
+        return StepCountSnapshot(
+            steps: lastPublishedSteps,
+            source: lastPublishedSource,
+            date: lastPublishedDate
+        )
     }
 
     func fetchSteps(
@@ -234,6 +250,29 @@ final class StepCountProvider {
 private extension StepCountProvider {
     var shouldSkipHealthKit: Bool {
         lastHealthKitError?.localizedDescription.contains("com.apple.developer.healthkit") == true
+    }
+
+    func isSameLocalDay(_ date: Date?, _ referenceDate: Date = Date()) -> Bool {
+        guard let date else {
+            return false
+        }
+
+        return Calendar.current.isDate(date, inSameDayAs: referenceDate)
+    }
+
+    func resetDailyCachesIfNeeded(referenceDate: Date = Date()) {
+        if let lastPublishedDate,
+           isSameLocalDay(lastPublishedDate, referenceDate) == false {
+            lastPublishedSteps = 0
+            lastPublishedSource = nil
+            self.lastPublishedDate = nil
+        }
+
+        if let lastPedometerDate,
+           isSameLocalDay(lastPedometerDate, referenceDate) == false {
+            lastPedometerSteps = 0
+            self.lastPedometerDate = nil
+        }
     }
 
     func requestHealthKitOrFallbackToPedometer() {
@@ -301,47 +340,64 @@ private extension StepCountProvider {
                 self.pedometer.stopUpdates()
                 self.isPedometerRunning = false
                 self.livePedometerStartedAt = nil
+                self.lastPedometerSteps = 0
+                self.lastPedometerDate = nil
                 self.refreshPedometerOnly(startLiveUpdates: true)
                 return
             }
 
             let steps = max(0, baselineSteps + data.numberOfSteps.intValue)
+            let snapshotDate = Date()
             self.lastPedometerSteps = steps
+            self.lastPedometerDate = snapshotDate
 
-            if self.canUseHealthKit, steps < self.lastPublishedSteps {
+            if self.canUseHealthKit,
+               self.isSameLocalDay(self.lastPublishedDate, snapshotDate),
+               steps < self.lastPublishedSteps {
                 return
             }
 
-            self.publish(steps: steps, source: .pedometer)
+            self.publish(steps: steps, source: .pedometer, date: snapshotDate)
         }
     }
 
     func refreshHealthKitThenPedometer() {
+        resetDailyCachesIfNeeded()
+
         HealthKitManager.shared.fetchTodaySteps { [weak self] healthStepsValue in
             guard let self else { return }
 
             let healthSteps = max(0, Int(healthStepsValue))
 
             self.queryPedometerSteps { pedometerSteps, _ in
-                let fallbackSteps = pedometerSteps ?? self.lastPedometerSteps
+                let snapshotDate = Date()
+                let cachedPedometerSteps = self.isSameLocalDay(self.lastPedometerDate, snapshotDate)
+                    ? self.lastPedometerSteps
+                    : 0
+                let fallbackSteps = pedometerSteps ?? cachedPedometerSteps
 
                 if fallbackSteps > healthSteps {
                     self.lastPedometerSteps = fallbackSteps
-                    self.publish(steps: fallbackSteps, source: .pedometer)
+                    self.lastPedometerDate = snapshotDate
+                    self.publish(steps: fallbackSteps, source: .pedometer, date: snapshotDate)
                 } else {
-                    self.publish(steps: healthSteps, source: .healthKit)
+                    self.publish(steps: healthSteps, source: .healthKit, date: snapshotDate)
                 }
             }
         }
     }
 
     func refreshPedometerOnly(startLiveUpdates: Bool = false) {
+        resetDailyCachesIfNeeded()
+
         queryPedometerSteps { [weak self] steps, error in
             guard let self else { return }
 
             if let steps {
+                let snapshotDate = Date()
                 self.lastPedometerSteps = steps
-                self.publish(steps: steps, source: .pedometer)
+                self.lastPedometerDate = snapshotDate
+                self.publish(steps: steps, source: .pedometer, date: snapshotDate)
 
                 if startLiveUpdates {
                     self.startPedometerUpdates(baselineSteps: steps)
@@ -410,9 +466,17 @@ private extension StepCountProvider {
             let pedometerSteps = pedometerResult
 
             if let pedometerSteps, pedometerSteps >= healthSteps {
-                completion(StepCountSnapshot(steps: pedometerSteps, source: .pedometer))
+                completion(StepCountSnapshot(
+                    steps: pedometerSteps,
+                    source: .pedometer,
+                    date: startDate
+                ))
             } else {
-                completion(StepCountSnapshot(steps: healthSteps, source: .healthKit))
+                completion(StepCountSnapshot(
+                    steps: healthSteps,
+                    source: .healthKit,
+                    date: startDate
+                ))
             }
         }
 
@@ -436,16 +500,18 @@ private extension StepCountProvider {
         }
     }
 
-    func publish(steps: Int, source: StepCountSource) {
-        guard steps != lastPublishedSteps || source != lastPublishedSource else {
+    func publish(steps: Int, source: StepCountSource, date: Date = Date()) {
+        let isSameDay = isSameLocalDay(lastPublishedDate, date)
+        guard steps != lastPublishedSteps || source != lastPublishedSource || isSameDay == false else {
             return
         }
 
         lastPublishedSteps = steps
         lastPublishedSource = source
+        lastPublishedDate = date
 
         DispatchQueue.main.async {
-            self.onUpdate?(StepCountSnapshot(steps: steps, source: source))
+            self.onUpdate?(StepCountSnapshot(steps: steps, source: source, date: date))
         }
     }
 

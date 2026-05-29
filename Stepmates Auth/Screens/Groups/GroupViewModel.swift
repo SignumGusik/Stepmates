@@ -8,7 +8,7 @@
 import Foundation
 import UIKit
 
-struct GroupDetailResponse: Decodable {
+struct GroupDetailResponse: Codable {
     let id: Int
     let name: String
     let description: String?
@@ -36,7 +36,7 @@ struct GroupDetailResponse: Decodable {
     }
 }
 
-struct GroupDetailMemberResponse: Decodable {
+struct GroupDetailMemberResponse: Codable {
     let id: Int
     let username: String
     let email: String
@@ -56,7 +56,7 @@ struct GroupDetailMemberResponse: Decodable {
     }
 }
 
-struct GroupLeaderboardResponse: Decodable {
+struct GroupLeaderboardResponse: Codable {
     let place: Int
     let userId: Int
     let username: String
@@ -94,6 +94,9 @@ extension GroupViewController {
 
         private let networkHandler: NetworkHandler
         private let tokenStorage: AccessTokenStorage
+        private var cachedDetail: GroupDetailResponse?
+        private var cachedLeaderboards: [String: [GroupLeaderboardItem]] = [:]
+        private let cacheTTL: TimeInterval = 30
 
         init(
             group: GroupListItem,
@@ -105,7 +108,46 @@ extension GroupViewController {
             self.tokenStorage = tokenStorage
         }
 
-        func getGroupDetail() async -> GroupDetailResponse? {
+        func cachedGroupDetailSnapshot() -> GroupDetailResponse? {
+            if let cachedDetail {
+                return cachedDetail
+            }
+
+            guard
+                let data = UserDefaults.standard.data(forKey: detailCacheKey),
+                let detail = try? JSONDecoder().decode(GroupDetailResponse.self, from: data)
+            else {
+                return nil
+            }
+
+            cachedDetail = detail
+            return detail
+        }
+
+        func cachedLeaderboardSnapshot(period: GroupViewController.LeaderboardPeriod) -> [GroupLeaderboardItem] {
+            if let cached = cachedLeaderboards[period.rawValue] {
+                return cached
+            }
+
+            guard
+                let data = UserDefaults.standard.data(forKey: leaderboardCacheKey(period: period)),
+                let response = try? JSONDecoder().decode([GroupLeaderboardResponse].self, from: data)
+            else {
+                return []
+            }
+
+            let items = mapLeaderboard(response)
+            cachedLeaderboards[period.rawValue] = items
+            return items
+        }
+
+        func getGroupDetail(force: Bool = false) async -> GroupDetailResponse? {
+            if !force,
+               let cached = cachedGroupDetailSnapshot(),
+               isCacheFresh(cacheDateKey: detailCacheDateKey) {
+                return cached
+            }
+
             let route = NetworkRoutes.groupDetail(groupId: group.id)
 
             guard
@@ -116,19 +158,29 @@ extension GroupViewController {
             }
 
             do {
-                return try await networkHandler.request(
+                let detail = try await networkHandler.request(
                     url,
                     responseType: GroupDetailResponse.self,
                     httpMethod: route.method.rawValue,
                     accessToken: accessToken
                 )
+                saveGroupDetailSnapshot(detail)
+                return detail
             } catch {
                 print("group detail error:", error)
-                return nil
+                return cachedGroupDetailSnapshot()
             }
         }
 
-        func getLeaderboard(period: GroupViewController.LeaderboardPeriod) async -> [GroupLeaderboardItem] {
+        func getLeaderboard(
+            period: GroupViewController.LeaderboardPeriod,
+            force: Bool = false
+        ) async -> [GroupLeaderboardItem] {
+            if !force,
+               isCacheFresh(cacheDateKey: leaderboardCacheDateKey(period: period)) {
+                return cachedLeaderboardSnapshot(period: period)
+            }
+
             let route = NetworkRoutes.groupLeaderboard(
                 groupId: group.id,
                 period: period.rawValue
@@ -149,21 +201,11 @@ extension GroupViewController {
                     accessToken: accessToken
                 )
 
-                return response.map { item in
-                    GroupLeaderboardItem(
-                        place: item.place,
-                        userId: item.userId,
-                        username: item.username,
-                        steps: item.steps,
-                        isCurrentUser: item.isMe,
-                        isAdmin: item.isAdmin,
-                        avatarUrl: item.avatarUrl,
-                        avatarColor: randomColor(for: item.username)
-                    )
-                }
+                saveLeaderboardSnapshot(response, period: period)
+                return mapLeaderboard(response)
             } catch {
                 print("group leaderboard error:", error)
-                return []
+                return cachedLeaderboardSnapshot(period: period)
             }
         }
 
@@ -204,6 +246,76 @@ extension GroupViewController {
 
             let index = abs(username.hashValue) % colors.count
             return colors[index]
+        }
+
+        private var accountCacheKey: String {
+            let rawKey = tokenStorage.get()?.refreshToken ?? "anonymous"
+            let accountKey = Data(rawKey.utf8)
+                .base64EncodedString()
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "=", with: "")
+                .prefix(36)
+
+            return String(accountKey)
+        }
+
+        private var detailCacheKey: String {
+            "group.detail.\(accountCacheKey).\(group.id)"
+        }
+
+        private var detailCacheDateKey: String {
+            detailCacheKey + ".updated_at"
+        }
+
+        private func leaderboardCacheKey(period: GroupViewController.LeaderboardPeriod) -> String {
+            "group.leaderboard.\(accountCacheKey).\(group.id).\(period.rawValue)"
+        }
+
+        private func leaderboardCacheDateKey(period: GroupViewController.LeaderboardPeriod) -> String {
+            leaderboardCacheKey(period: period) + ".updated_at"
+        }
+
+        private func isCacheFresh(cacheDateKey: String) -> Bool {
+            guard let cachedAt = UserDefaults.standard.object(forKey: cacheDateKey) as? Date else {
+                return false
+            }
+
+            return Date().timeIntervalSince(cachedAt) < cacheTTL
+        }
+
+        private func saveGroupDetailSnapshot(_ detail: GroupDetailResponse) {
+            cachedDetail = detail
+            guard let data = try? JSONEncoder().encode(detail) else { return }
+            UserDefaults.standard.set(data, forKey: detailCacheKey)
+            UserDefaults.standard.set(Date(), forKey: detailCacheDateKey)
+        }
+
+        private func saveLeaderboardSnapshot(
+            _ response: [GroupLeaderboardResponse],
+            period: GroupViewController.LeaderboardPeriod
+        ) {
+            let items = mapLeaderboard(response)
+            cachedLeaderboards[period.rawValue] = items
+
+            guard let data = try? JSONEncoder().encode(response) else { return }
+            UserDefaults.standard.set(data, forKey: leaderboardCacheKey(period: period))
+            UserDefaults.standard.set(Date(), forKey: leaderboardCacheDateKey(period: period))
+        }
+
+        private func mapLeaderboard(_ response: [GroupLeaderboardResponse]) -> [GroupLeaderboardItem] {
+            response.map { item in
+                GroupLeaderboardItem(
+                    place: item.place,
+                    userId: item.userId,
+                    username: item.username,
+                    steps: item.steps,
+                    isCurrentUser: item.isMe,
+                    isAdmin: item.isAdmin,
+                    avatarUrl: item.avatarUrl,
+                    avatarColor: randomColor(for: item.username)
+                )
+            }
         }
     }
 }

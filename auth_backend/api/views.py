@@ -1299,7 +1299,7 @@ class DailyStepsSyncApi(GenericAPIView):
         steps = serializer.validated_data["steps"]
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
-        today = timezone.localdate()
+        server_today = timezone.localdate()
         daily_steps, created = DailySteps.objects.get_or_create(
             user=request.user,
             date=date,
@@ -1320,7 +1320,7 @@ class DailyStepsSyncApi(GenericAPIView):
                 daily_steps.steps = steps
                 update_fields.append("steps")
 
-            if date == today and daily_steps.goal_steps != profile.daily_goal_steps:
+            if date >= server_today and daily_steps.goal_steps != profile.daily_goal_steps:
                 daily_steps.goal_steps = profile.daily_goal_steps
                 update_fields.append("goal_steps")
 
@@ -1343,14 +1343,14 @@ class DailyGoalApi(GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
         goal_steps = serializer.validated_data["daily_goal_steps"]
+        date = serializer.validated_data.get("date", timezone.localdate())
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
         profile.daily_goal_steps = goal_steps
         profile.save(update_fields=["daily_goal_steps", "updated_at"])
 
-        today = timezone.localdate()
         daily_steps, _ = DailySteps.objects.get_or_create(
             user=request.user,
-            date=today,
+            date=date,
             defaults={
                 "steps": 0,
                 "goal_steps": goal_steps,
@@ -1364,6 +1364,7 @@ class DailyGoalApi(GenericAPIView):
         return Response(
             {
                 "daily_goal_steps": goal_steps,
+                "date": date,
                 "today_steps": daily_steps.steps,
                 "is_goal_completed": daily_steps.steps >= goal_steps,
             },
@@ -1375,17 +1376,33 @@ class MyTodayStepsApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        today = timezone.localdate()
+        requested_date = timezone.localdate()
+        date_param = request.query_params.get("date")
+
+        if date_param:
+            requested_date = parse_date(date_param)
+            if requested_date is None:
+                return Response(
+                    {"detail": "Некорректная дата. Используйте формат YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if requested_date > timezone.localdate() + timedelta(days=1):
+                return Response(
+                    {"detail": "Нельзя запрашивать шаги из будущего."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
         daily_steps = DailySteps.objects.filter(
             user=request.user,
-            date=today
+            date=requested_date
         ).first()
 
         if daily_steps is None:
             return Response(
                 {
-                    "date": today,
+                    "date": requested_date,
                     "steps": 0,
                     "goal_steps": profile.daily_goal_steps,
                     "is_goal_completed": False,

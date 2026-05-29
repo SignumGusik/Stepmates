@@ -111,7 +111,7 @@ extension HomeViewController.ViewModel {
         return formatter
     }()
 
-    func loadTodayStepsState() async -> SyncTodayStepsResponse? {
+    func loadTodayStepsState(date: Date = Date()) async -> SyncTodayStepsResponse? {
         let route = NetworkRoutes.myTodaySteps
 
         guard let url = route.url,
@@ -119,9 +119,17 @@ extension HomeViewController.ViewModel {
             return nil
         }
 
+        var requestURL = url
+        if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.queryItems = [
+                URLQueryItem(name: "date", value: Self.stepsDateFormatter.string(from: date))
+            ]
+            requestURL = components.url ?? url
+        }
+
         do {
             return try await networkHandler.request(
-                url,
+                requestURL,
                 responseType: SyncTodayStepsResponse.self,
                 httpMethod: route.method.rawValue,
                 accessToken: accessToken
@@ -132,7 +140,7 @@ extension HomeViewController.ViewModel {
         }
     }
 
-    func updateDailyGoal(_ goal: Int) async throws -> DailyGoalResponse {
+    func updateDailyGoal(_ goal: Int, date: Date = Date()) async throws -> DailyGoalResponse {
         let route = NetworkRoutes.updateDailyGoal
 
         guard let url = route.url,
@@ -142,7 +150,10 @@ extension HomeViewController.ViewModel {
 
         return try await networkHandler.request(
             url,
-            jsonDictionary: ["daily_goal_steps": goal],
+            jsonDictionary: [
+                "daily_goal_steps": goal,
+                "date": Self.stepsDateFormatter.string(from: date)
+            ],
             responseType: DailyGoalResponse.self,
             httpMethod: route.method.rawValue,
             accessToken: accessToken

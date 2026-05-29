@@ -11,6 +11,9 @@ final class NotificationsViewController: UIViewController {
 
     private let viewModel: ViewModel
     private var items: [AppNotificationDTO] = []
+    private var isLoadingNotifications = false
+    private var lastNotificationsLoadAt = Date.distantPast
+    private let notificationsReloadInterval: TimeInterval = 20
 
     private lazy var titleLabel = UILabel.makeManrope(
         text: "Уведомления",
@@ -53,6 +56,7 @@ extension NotificationsViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
+        applyCachedNotificationsIfAvailable()
         loadNotifications()
     }
 
@@ -93,26 +97,55 @@ private extension NotificationsViewController {
             .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -20)
     }
 
-    func loadNotifications() {
+    func applyCachedNotificationsIfAvailable() {
+        let cached = viewModel.cachedNotificationsSnapshot()
+        guard cached.isEmpty == false else { return }
+        applyNotifications(cached)
+    }
+
+    func loadNotifications(force: Bool = false) {
+        guard isLoadingNotifications == false else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        let elapsed = Date().timeIntervalSince(lastNotificationsLoadAt)
+        guard force || elapsed >= notificationsReloadInterval else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        isLoadingNotifications = true
+
         Task { [weak self] in
             guard let self else { return }
 
             do {
-                let result = try await viewModel.getNotifications()
+                let result = try await viewModel.getNotifications(force: force)
 
                 await MainActor.run {
-                    self.items = result
-                    self.tableView.reloadData()
+                    self.isLoadingNotifications = false
+                    self.lastNotificationsLoadAt = Date()
+                    self.applyNotifications(result)
                     self.refreshControl.endRefreshing()
-                    self.updateEmptyState()
                 }
             } catch {
                 await MainActor.run {
+                    self.isLoadingNotifications = false
+                    self.lastNotificationsLoadAt = Date()
                     self.refreshControl.endRefreshing()
-                    self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
+                    if self.items.isEmpty {
+                        self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
+                    }
                 }
             }
         }
+    }
+
+    func applyNotifications(_ notifications: [AppNotificationDTO]) {
+        items = notifications
+        tableView.reloadData()
+        updateEmptyState()
     }
 
     func updateEmptyState() {
@@ -126,7 +159,7 @@ private extension NotificationsViewController {
 private extension NotificationsViewController {
 
     @objc func onRefresh() {
-        loadNotifications()
+        loadNotifications(force: true)
     }
 
     func accept(item: AppNotificationDTO) {
@@ -147,6 +180,7 @@ private extension NotificationsViewController {
 
                 await MainActor.run {
                     self.items.removeAll { $0.id == item.id && $0.type == item.type }
+                    self.viewModel.saveNotificationsSnapshot(self.items)
                     self.tableView.reloadData()
                     self.updateEmptyState()
                 }
@@ -176,6 +210,7 @@ private extension NotificationsViewController {
 
                 await MainActor.run {
                     self.items.removeAll { $0.id == item.id && $0.type == item.type }
+                    self.viewModel.saveNotificationsSnapshot(self.items)
                     self.tableView.reloadData()
                     self.updateEmptyState()
                 }

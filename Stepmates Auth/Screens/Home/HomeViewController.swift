@@ -180,8 +180,10 @@ class HomeViewController: UIViewController {
     private var isHealthAccessActionEnabled = false
     private var isHomeVisible = false
     private var lastSyncedSteps: Int?
+    private var lastSyncedStepsDateString: String?
     private var lastStepsSyncAt: Date?
     private var displayedSteps = 0
+    private var displayedStepsDateString = HomeViewController.localDateString()
     private var stepCounterDisplayLink: CADisplayLink?
     private var stepCounterStartValue = 0
     private var stepCounterTargetValue = 0
@@ -222,12 +224,14 @@ extension HomeViewController {
         setupObservers()
         setupAppStateObservers()
         applyCachedHomeCountersIfAvailable()
+        resetStepsIfNeededForNewDay()
         loadHomeCounters()
         loadTodayStepsState()
     }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         isHomeVisible = true
+        resetStepsIfNeededForNewDay()
         loadHomeCounters(force: true)
         loadTodayStepsState()
         setupStepCounting()
@@ -517,6 +521,22 @@ private extension HomeViewController {
     }
 
 }
+
+private extension HomeViewController {
+    static var localStepsDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    static func localDateString(for date: Date = Date()) -> String {
+        localStepsDateFormatter.string(from: date)
+    }
+}
+
 // MARK: -Observers
 private extension HomeViewController {
     func setupObservers() {
@@ -537,12 +557,30 @@ private extension HomeViewController {
                 return
             }
 
+            self.resetStepsIfNeededForNewDay()
             self.loadHomeCounters()
             self.loadTodayStepsState()
             self.setupStepCounting()
         }
 
         observers.append(observer)
+
+        let dayChangedObserver = NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.isHomeVisible else {
+                return
+            }
+
+            self.resetStepsIfNeededForNewDay()
+            self.loadHomeCounters(force: true)
+            self.loadTodayStepsState()
+            self.setupStepCounting()
+        }
+
+        observers.append(dayChangedObserver)
 
         let stepSyncObserver = NotificationCenter.default.addObserver(
             forName: .stepSyncDidUpdateRecentDays,
@@ -583,6 +621,7 @@ private extension HomeViewController {
     }
 
     func startStepCounting(showHelpIfUnavailable: Bool) {
+        resetStepsIfNeededForNewDay()
         isStepCountingReady = false
         showStepsDefaultState()
 
@@ -609,13 +648,41 @@ private extension HomeViewController {
     }
 
     func applyStepSnapshot(_ snapshot: StepCountSnapshot) {
+        guard Calendar.current.isDateInToday(snapshot.date) else {
+            return
+        }
+
+        resetStepsIfNeededForNewDay(referenceDate: snapshot.date)
         isStepCountingReady = true
         isHealthAccessActionEnabled = false
 
-        applyStepsValue(snapshot.steps, animated: true, celebrate: true)
+        applyStepsValue(snapshot.steps, animated: true, celebrate: true, date: snapshot.date)
         setGoalText(goalText(), isAction: false)
 
-        syncStepsIfNeeded(snapshot.steps)
+        syncStepsIfNeeded(snapshot.steps, date: snapshot.date)
+    }
+
+    func resetStepsIfNeededForNewDay(referenceDate: Date = Date()) {
+        let currentDateString = Self.localDateString(for: referenceDate)
+        guard displayedStepsDateString != currentDateString else {
+            return
+        }
+
+        displayedStepsDateString = currentDateString
+        lastSyncedSteps = nil
+        lastSyncedStepsDateString = nil
+        lastStepsSyncAt = nil
+
+        stepCounterDisplayLink?.invalidate()
+        stepCounterDisplayLink = nil
+        displayedSteps = 0
+        steps = 0
+        stepsLabel.text = "\(formatSteps(0)) шагов"
+        updateProgress(animated: false)
+    }
+
+    func isResponseDate(_ responseDate: String?, matching date: Date) -> Bool {
+        responseDate == Self.localDateString(for: date)
     }
 
     func showStepsDefaultState() {
@@ -631,29 +698,42 @@ private extension HomeViewController {
         progressBar.setProgress(0, animated: true)
     }
 
-    func syncStepsIfNeeded(_ steps: Int) {
+    func syncStepsIfNeeded(_ steps: Int, date: Date = Date()) {
         let now = Date()
+        let dateString = Self.localDateString(for: date)
+
+        guard dateString == Self.localDateString() else {
+            return
+        }
 
         if let lastSyncedSteps,
-           lastSyncedSteps == steps {
+           lastSyncedSteps == steps,
+           lastSyncedStepsDateString == dateString {
             return
         }
 
         if let lastSyncedSteps,
            let lastStepsSyncAt,
+           lastSyncedStepsDateString == dateString,
            now.timeIntervalSince(lastStepsSyncAt) < 60,
            abs(steps - lastSyncedSteps) < 25 {
             return
         }
 
         lastSyncedSteps = steps
+        lastSyncedStepsDateString = dateString
         lastStepsSyncAt = now
 
         Task {
-            let response = await viewModel.syncTodaySteps(steps)
-            guard let goalSteps = response?.goalSteps else { return }
+            let response = await viewModel.syncTodaySteps(steps, date: date)
 
             await MainActor.run {
+                guard let goalSteps = response?.goalSteps,
+                      self.isResponseDate(response?.date, matching: date)
+                else {
+                    return
+                }
+
                 self.applyDailyGoal(goalSteps, animated: true, celebrateIfCompleted: false)
             }
         }
@@ -708,26 +788,37 @@ private extension HomeViewController {
     }
 
     func loadTodayStepsState() {
+        let requestedDate = Date()
+        resetStepsIfNeededForNewDay(referenceDate: requestedDate)
+
         Task { [weak self] in
             guard let self else { return }
-            let state = await viewModel.loadTodayStepsState()
+            let state = await viewModel.loadTodayStepsState(date: requestedDate)
 
             await MainActor.run {
+                self.resetStepsIfNeededForNewDay(referenceDate: requestedDate)
+
                 if let goalSteps = state?.goalSteps {
                     self.applyDailyGoal(goalSteps, animated: false, celebrateIfCompleted: false)
                 }
 
-                if let todaySteps = state?.steps, todaySteps > Int(self.steps) {
-                    self.applyStepsValue(todaySteps, animated: false, celebrate: false)
+                guard self.isResponseDate(state?.date, matching: requestedDate) else {
+                    return
+                }
+
+                if let todaySteps = state?.steps,
+                   todaySteps > Int(self.steps) || self.isStepCountingReady == false {
+                    self.applyStepsValue(todaySteps, animated: false, celebrate: false, date: requestedDate)
                 }
             }
         }
     }
 
-    func applyStepsValue(_ value: Int, animated: Bool, celebrate: Bool) {
+    func applyStepsValue(_ value: Int, animated: Bool, celebrate: Bool, date: Date = Date()) {
         let wasCompleted = Int(steps) >= dailyGoal
         let normalizedValue = max(0, value)
 
+        displayedStepsDateString = Self.localDateString(for: date)
         steps = CGFloat(normalizedValue)
         setStepCounterValue(normalizedValue, animated: animated)
         updateProgress(animated: animated)
@@ -1179,17 +1270,24 @@ private extension HomeViewController {
         goalEditorSaveButton.alpha = 0.7
         goalEditorSaveButton.setTitle("Сохраняем...", for: .normal)
 
+        let requestedDate = Date()
         Task { [weak self] in
             guard let self else { return }
 
             do {
-                let response = try await viewModel.updateDailyGoal(goal)
+                let response = try await viewModel.updateDailyGoal(goal, date: requestedDate)
 
                 await MainActor.run {
                     self.applyDailyGoal(response.dailyGoalSteps, animated: true)
 
-                    if let todaySteps = response.todaySteps {
-                        self.applyStepsValue(todaySteps, animated: true, celebrate: response.isGoalCompleted == true)
+                    if self.isResponseDate(response.date, matching: requestedDate),
+                       let todaySteps = response.todaySteps {
+                        self.applyStepsValue(
+                            todaySteps,
+                            animated: true,
+                            celebrate: response.isGoalCompleted == true,
+                            date: requestedDate
+                        )
                     }
 
                     self.hideGoalEditor()

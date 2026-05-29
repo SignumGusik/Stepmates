@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model, authenticate
 from rest_framework import serializers
 from django.utils import timezone
+from datetime import timedelta
 import re
 
 from .models import (
@@ -340,7 +341,10 @@ class DailyStepsSyncSerializer(serializers.Serializer):
     date = serializers.DateField(required=False)
 
     def validate_date(self, value):
-        if value > timezone.localdate():
+        # The mobile app sends the user's local calendar day. Render/Django
+        # runs in UTC, so Moscow can legitimately be "tomorrow" for the server
+        # between 00:00 and 03:00 local time.
+        if value > timezone.localdate() + timedelta(days=1):
             raise serializers.ValidationError("Нельзя отправить шаги из будущего.")
         return value
 
@@ -359,6 +363,12 @@ class DailyStepsSerializer(serializers.ModelSerializer):
 
 class DailyGoalSerializer(serializers.Serializer):
     daily_goal_steps = serializers.IntegerField(min_value=1000, max_value=100000)
+    date = serializers.DateField(required=False)
+
+    def validate_date(self, value):
+        if value > timezone.localdate() + timedelta(days=1):
+            raise serializers.ValidationError("Нельзя обновить цель для будущей даты.")
+        return value
 
 
 class FriendLeaderboardSerializer(serializers.Serializer):

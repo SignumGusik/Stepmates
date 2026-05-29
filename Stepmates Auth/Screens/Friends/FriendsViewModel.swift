@@ -13,6 +13,8 @@ extension FriendsViewController {
         private let networkHandler: NetworkHandler
         private let friendsService: FriendsService
         private let tokenStorage: AccessTokenStorage
+        private var cachedLeaderboards: [String: [FriendLeaderboardItem]] = [:]
+        private let cacheTTL: TimeInterval = 30
 
         init(networkHandler: NetworkHandler, friendsService: FriendsService, tokenStorage: AccessTokenStorage) {
             self.networkHandler = networkHandler
@@ -24,7 +26,32 @@ extension FriendsViewController {
 
 extension FriendsViewController.ViewModel {
 
-    func getLeaderboardItems(period: FriendsViewController.LeaderboardPeriod) async -> [FriendLeaderboardItem] {
+    func cachedLeaderboardSnapshot(period: FriendsViewController.LeaderboardPeriod) -> [FriendLeaderboardItem] {
+        if let cached = cachedLeaderboards[period.rawValue] {
+            return cached
+        }
+
+        guard
+            let data = UserDefaults.standard.data(forKey: leaderboardCacheKey(period: period)),
+            let response = try? JSONDecoder().decode([FriendLeaderboardResponse].self, from: data)
+        else {
+            return []
+        }
+
+        let items = mapLeaderboard(response)
+        cachedLeaderboards[period.rawValue] = items
+        return items
+    }
+
+    func getLeaderboardItems(
+        period: FriendsViewController.LeaderboardPeriod,
+        force: Bool = false
+    ) async -> [FriendLeaderboardItem] {
+        if !force,
+           isCacheFresh(cacheDateKey: leaderboardCacheDateKey(period: period)) {
+            return cachedLeaderboardSnapshot(period: period)
+        }
+
         let route = NetworkRoutes.friendsLeaderboard
 
         guard
@@ -53,21 +80,66 @@ extension FriendsViewController.ViewModel {
                 accessToken: accessToken
             )
 
-            return response.map { item in
-                FriendLeaderboardItem(
-                    userId: item.userId,
-                    username: item.username,
-                    place: item.place,
-                    steps: item.steps,
-                    avatarColor: randomColor(for: item.username),
-                    isCurrentUser: item.isMe,
-                    avatarUrl: item.avatarUrl,
-                    avatarImage: nil
-                )
-            }
+            saveLeaderboardSnapshot(response, period: period)
+            return mapLeaderboard(response)
         } catch {
             print("leaderboard error: \(error)")
-            return []
+            return cachedLeaderboardSnapshot(period: period)
+        }
+    }
+
+    private var accountCacheKey: String {
+        let rawKey = tokenStorage.get()?.refreshToken ?? "anonymous"
+        let accountKey = Data(rawKey.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+            .prefix(36)
+
+        return String(accountKey)
+    }
+
+    private func leaderboardCacheKey(period: FriendsViewController.LeaderboardPeriod) -> String {
+        "friends.leaderboard.\(accountCacheKey).\(period.rawValue)"
+    }
+
+    private func leaderboardCacheDateKey(period: FriendsViewController.LeaderboardPeriod) -> String {
+        leaderboardCacheKey(period: period) + ".updated_at"
+    }
+
+    private func isCacheFresh(cacheDateKey: String) -> Bool {
+        guard let cachedAt = UserDefaults.standard.object(forKey: cacheDateKey) as? Date else {
+            return false
+        }
+
+        return Date().timeIntervalSince(cachedAt) < cacheTTL
+    }
+
+    private func saveLeaderboardSnapshot(
+        _ response: [FriendLeaderboardResponse],
+        period: FriendsViewController.LeaderboardPeriod
+    ) {
+        let items = mapLeaderboard(response)
+        cachedLeaderboards[period.rawValue] = items
+
+        guard let data = try? JSONEncoder().encode(response) else { return }
+        UserDefaults.standard.set(data, forKey: leaderboardCacheKey(period: period))
+        UserDefaults.standard.set(Date(), forKey: leaderboardCacheDateKey(period: period))
+    }
+
+    private func mapLeaderboard(_ response: [FriendLeaderboardResponse]) -> [FriendLeaderboardItem] {
+        response.map { item in
+            FriendLeaderboardItem(
+                userId: item.userId,
+                username: item.username,
+                place: item.place,
+                steps: item.steps,
+                avatarColor: randomColor(for: item.username),
+                isCurrentUser: item.isMe,
+                avatarUrl: item.avatarUrl,
+                avatarImage: nil
+            )
         }
     }
 

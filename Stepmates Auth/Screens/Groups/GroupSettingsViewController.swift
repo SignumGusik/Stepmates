@@ -150,6 +150,8 @@ extension GroupSettingsViewController {
         statusTextField.delegate = self
 
         setupViews()
+        render()
+        applyCachedData()
         loadData()
     }
 }
@@ -274,11 +276,16 @@ private extension GroupSettingsViewController {
         setEditingMode(false)
     }
 
-    func loadData() {
+    func applyCachedData() {
+        guard viewModel.cachedDetailSnapshot() != nil else { return }
+        render()
+    }
+
+    func loadData(force: Bool = false) {
         Task { [weak self] in
             guard let self else { return }
 
-            await viewModel.loadDetail()
+            await viewModel.loadDetail(force: force)
 
             await MainActor.run {
                 self.render()

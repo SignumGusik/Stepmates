@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct FriendLeaderboardResponse: Decodable {
+struct FriendLeaderboardResponse: Codable {
     let place: Int
     let userId: Int
     let username: String
@@ -49,11 +49,13 @@ struct SyncTodayStepsResponse: Decodable {
 
 struct DailyGoalResponse: Decodable {
     let dailyGoalSteps: Int
+    let date: String?
     let todaySteps: Int?
     let isGoalCompleted: Bool?
 
     enum CodingKeys: String, CodingKey {
         case dailyGoalSteps = "daily_goal_steps"
+        case date
         case todaySteps = "today_steps"
         case isGoalCompleted = "is_goal_completed"
     }

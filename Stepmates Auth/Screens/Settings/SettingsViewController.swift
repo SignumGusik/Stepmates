@@ -188,6 +188,8 @@ extension SettingsViewController {
         super.viewDidLoad()
         usernameTextField.delegate = self
         setupViews()
+        renderLocalAvatar()
+        applyCachedProfileIfAvailable()
         loadProfile()
     }
 }
@@ -598,7 +600,7 @@ private extension SettingsViewController {
                     _ = try await self.viewModel.uploadAvatarToServer(selectedAvatar)
                 }
 
-                let freshProfile = try await self.viewModel.fetchMyProfile()
+                let freshProfile = try await self.viewModel.fetchMyProfile(force: true)
 
                 await MainActor.run {
                     self.setProfileSaving(false)
@@ -660,6 +662,11 @@ private extension SettingsViewController {
         }
         return error.localizedDescription
     }
+    func applyCachedProfileIfAvailable() {
+        guard let cachedProfile = viewModel.cachedProfileSnapshot() else { return }
+        render(cachedProfile)
+    }
+
     func loadProfile() {
         Task { [weak self] in
             guard let self else { return }
@@ -670,16 +677,11 @@ private extension SettingsViewController {
                 await MainActor.run {
                     self.render(profile)
                 }
-
-                if let image = try await viewModel.syncAvatarIfNeeded() {
-                    await MainActor.run {
-                        self.avatarImageView.image = image
-                        self.avatarImageView.backgroundColor = .clear
-                    }
-                }
             } catch {
                 await MainActor.run {
-                    self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
+                    if self.viewModel.cachedProfileSnapshot() == nil {
+                        self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
+                    }
                 }
             }
         }

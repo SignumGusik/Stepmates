@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct MyProfileDTO: Decodable {
+struct MyProfileDTO: Codable {
     let id: Int
     let username: String
     let email: String
@@ -38,7 +38,7 @@ struct MyProfileDTO: Decodable {
     }
 }
 
-struct ProfileFriendPreviewDTO: Decodable {
+struct ProfileFriendPreviewDTO: Codable {
     let id: Int
     let username: String
     let avatarUrl: String?
@@ -50,7 +50,7 @@ struct ProfileFriendPreviewDTO: Decodable {
     }
 }
 
-struct ProfileAchievementDTO: Decodable {
+struct ProfileAchievementDTO: Codable {
     let code: String
     let title: String
     let current: Int
@@ -104,7 +104,7 @@ struct ProfileAchievementDTO: Decodable {
         isFinished ? "\(code)_complete" : "\(code)_finished"
     }
 }
-struct AvatarUploadResponseDTO: Decodable {
+struct AvatarUploadResponseDTO: Codable {
     let avatarUrl: String?
 
     enum CodingKeys: String, CodingKey {

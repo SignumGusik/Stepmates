@@ -8,13 +8,13 @@
 
 import Foundation
 
-enum NotificationKind: String, Decodable {
+enum NotificationKind: String, Codable {
     case friendRequest = "friend_request"
     case groupInvite = "group_invite"
     case friendRequestAccepted = "friend_request_accepted"
 }
 
-struct NotificationUserDTO: Decodable {
+struct NotificationUserDTO: Codable {
     let id: Int
     let username: String
     let email: String
@@ -32,7 +32,7 @@ struct NotificationUserDTO: Decodable {
     }
 }
 
-struct NotificationGroupDTO: Decodable {
+struct NotificationGroupDTO: Codable {
     let id: Int
     let name: String
     let avatarUrl: String?
@@ -44,7 +44,7 @@ struct NotificationGroupDTO: Decodable {
     }
 }
 
-struct AppNotificationDTO: Decodable {
+struct AppNotificationDTO: Codable {
     let id: Int
     let type: NotificationKind
     let createdAt: String
@@ -69,6 +69,9 @@ extension NotificationsViewController {
     final class ViewModel {
         private let networkHandler: NetworkHandler
         private let tokenStorage: AccessTokenStorage
+        private var cachedNotifications: [AppNotificationDTO]?
+        private var cachedNotificationsAt: Date?
+        private let cacheTTL: TimeInterval = 25
 
         init(networkHandler: NetworkHandler, tokenStorage: AccessTokenStorage) {
             self.networkHandler = networkHandler
@@ -79,7 +82,41 @@ extension NotificationsViewController {
 
 extension NotificationsViewController.ViewModel {
 
-    func getNotifications() async throws -> [AppNotificationDTO] {
+    func cachedNotificationsSnapshot() -> [AppNotificationDTO] {
+        if let cachedNotifications {
+            return cachedNotifications
+        }
+
+        guard
+            let data = UserDefaults.standard.data(forKey: notificationsCacheKey),
+            let notifications = try? JSONDecoder().decode([AppNotificationDTO].self, from: data)
+        else {
+            return []
+        }
+
+        cachedNotifications = notifications
+        cachedNotificationsAt = UserDefaults.standard.object(forKey: notificationsCacheDateKey) as? Date
+        return notifications
+    }
+
+    func saveNotificationsSnapshot(_ notifications: [AppNotificationDTO]) {
+        cachedNotifications = notifications
+        let now = Date()
+        cachedNotificationsAt = now
+
+        guard let data = try? JSONEncoder().encode(notifications) else { return }
+        UserDefaults.standard.set(data, forKey: notificationsCacheKey)
+        UserDefaults.standard.set(now, forKey: notificationsCacheDateKey)
+    }
+
+    func getNotifications(force: Bool = false) async throws -> [AppNotificationDTO] {
+        if !force,
+           let cachedNotifications,
+           let cachedNotificationsAt,
+           Date().timeIntervalSince(cachedNotificationsAt) < cacheTTL {
+            return cachedNotifications
+        }
+
         let route = NetworkRoutes.notifications
 
         guard let url = route.url else {
@@ -90,12 +127,40 @@ extension NotificationsViewController.ViewModel {
             throw ConfigurationError.nilObject
         }
 
-        return try await networkHandler.request(
-            url,
-            responseType: [AppNotificationDTO].self,
-            httpMethod: route.method.rawValue,
-            accessToken: accessToken
-        )
+        do {
+            let notifications = try await networkHandler.request(
+                url,
+                responseType: [AppNotificationDTO].self,
+                httpMethod: route.method.rawValue,
+                accessToken: accessToken
+            )
+
+            saveNotificationsSnapshot(notifications)
+            return notifications
+        } catch {
+            let cached = cachedNotificationsSnapshot()
+            if cached.isEmpty == false {
+                return cached
+            }
+
+            throw error
+        }
+    }
+
+    private var notificationsCacheKey: String {
+        let rawKey = tokenStorage.get()?.refreshToken ?? "anonymous"
+        let accountKey = Data(rawKey.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+            .prefix(36)
+
+        return "notifications.list.\(accountKey)"
+    }
+
+    private var notificationsCacheDateKey: String {
+        notificationsCacheKey + ".updated_at"
     }
 
     func acceptFriendRequest(id: Int) async throws {

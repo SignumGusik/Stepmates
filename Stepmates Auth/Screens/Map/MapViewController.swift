@@ -945,9 +945,9 @@ private extension MapViewController {
                 addRouteGapIfNeeded(
                     from: previousVisibleEnd,
                     to: currentStart,
-                    color: UIColor.systemGray.withAlphaComponent(0.64),
-                    strokeWidth: 4.0,
-                    outlineWidth: 1.0,
+                    color: UIColor.black.withAlphaComponent(0.86),
+                    strokeWidth: 4.8,
+                    outlineWidth: 1.4,
                     zIndex: 7,
                     storeIn: &myRoutePolylines
                 )
@@ -1088,7 +1088,7 @@ private extension MapViewController {
 
         let polyline = YMKPolyline(points: [start, end])
         let object = mapView.mapWindow.map.mapObjects.addPolyline(with: polyline)
-        let outlineColor = UIColor.white.withAlphaComponent(0.5)
+        let outlineColor = UIColor.white.withAlphaComponent(0.78)
 
         object.setStrokeColorWith(color)
         object.outlineColor = outlineColor
@@ -1137,8 +1137,8 @@ private extension MapViewController {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.58) {
             guard object.isValid else { return }
-            object.setStrokeColorWith(self.routeColor(strokeColor, alphaMultiplier: 0.58))
-            object.outlineColor = self.routeColor(outlineColor, alphaMultiplier: 0.58)
+            object.setStrokeColorWith(self.routeColor(strokeColor, alphaMultiplier: 0.82))
+            object.outlineColor = self.routeColor(outlineColor, alphaMultiplier: 0.82)
         }
     }
 
@@ -1575,9 +1575,9 @@ private extension MapViewController {
                     addRouteGapIfNeeded(
                         from: previousVisibleEnd,
                         to: currentStart,
-                        color: UIColor.systemGray.withAlphaComponent(0.44),
-                        strokeWidth: 2.4,
-                        outlineWidth: 0.7,
+                        color: UIColor.black.withAlphaComponent(0.76),
+                        strokeWidth: 3.4,
+                        outlineWidth: 1.0,
                         zIndex: 5,
                         storeIn: &createdPolylines
                     )
