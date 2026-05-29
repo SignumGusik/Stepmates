@@ -70,6 +70,26 @@ def _avatar_url(request, user):
         return None
     return request.build_absolute_uri(profile.avatar.url)
 
+def _requested_steps_date(request):
+    date_param = request.query_params.get("date")
+    if not date_param:
+        return timezone.localdate(), None
+
+    requested_date = parse_date(date_param)
+    if requested_date is None:
+        return None, Response(
+            {"detail": "Некорректная дата. Используйте формат YYYY-MM-DD."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if requested_date > timezone.localdate() + timedelta(days=1):
+        return None, Response(
+            {"detail": "Нельзя запрашивать шаги из будущего."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return requested_date, None
+
 MOVEMENT_KIND_ALIASES = {
     "walking": "walking",
     "running": "walking",
@@ -880,8 +900,8 @@ def ensure_not_last_admin(group: Group, user_id: int):
         raise ValidationError({"non_field_errors": ["Нельзя удалить/понизить последнего админа."]})
 
 
-def build_group_list_stats(groups, user_id: int):
-    today = timezone.localdate()
+def build_group_list_stats(groups, user_id: int, today=None):
+    today = today or timezone.localdate()
     member_ids_by_group = {}
     all_member_ids = set()
     stats = {}
@@ -939,10 +959,14 @@ class GroupsAPI(APIView):
         if str(request.query_params.get("compact", "")).lower() in ("1", "true", "yes"):
             return Response(list(qs.values("id")))
 
+        today, error_response = _requested_steps_date(request)
+        if error_response is not None:
+            return error_response
+
         groups = list(qs)
         context = {
             "request": request,
-            "group_list_stats": build_group_list_stats(groups, request.user.id),
+            "group_list_stats": build_group_list_stats(groups, request.user.id, today=today),
         }
         return Response(GroupListSerializer(groups, many=True, context=context).data)
 
@@ -1083,7 +1107,9 @@ class GroupLeaderboardAPI(APIView):
         group = get_object_or_404(Group, id=group_id)
         require_member(group, request.user)
 
-        today = timezone.localdate()
+        today, error_response = _requested_steps_date(request)
+        if error_response is not None:
+            return error_response
 
         period = (request.query_params.get("period") or "today").lower().strip()
         if period not in ("today", "week", "month"):
@@ -1426,7 +1452,10 @@ class FriendsLeaderboardApi(APIView):
     def get(self, request):
         from django.db.models import Sum  # чтобы не править импорты наверху
 
-        today = timezone.localdate()
+        today, error_response = _requested_steps_date(request)
+        if error_response is not None:
+            return error_response
+
         me = request.user
 
         period = (request.query_params.get("period") or "today").lower().strip()
@@ -2488,7 +2517,10 @@ class MapFriendsRankingApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        today = timezone.localdate()
+        today, error_response = _requested_steps_date(request)
+        if error_response is not None:
+            return error_response
+
         me_id = request.user.id
 
         friend_pairs = Friendship.objects.filter(
@@ -2532,7 +2564,10 @@ class MapGroupRankingApi(APIView):
         if not group:
             return Response({"detail": "Группа не найдена."}, status=status.HTTP_404_NOT_FOUND)
 
-        today = timezone.localdate()
+        today, error_response = _requested_steps_date(request)
+        if error_response is not None:
+            return error_response
+
         me_id = request.user.id
 
         ids = set(group.memberships.values_list("user_id", flat=True))

@@ -234,9 +234,10 @@ final class MapService {
             throw NSError(domain: "auth", code: 401)
         }
 
-        guard let url = NetworkRoutes.mapFriendsRanking.url else {
+        guard let baseURL = NetworkRoutes.mapFriendsRanking.url else {
             throw ConfigurationError.nilObject
         }
+        let url = urlWithLocalDate(baseURL)
 
         return try await networkHandler.request(
             url,
@@ -251,9 +252,10 @@ final class MapService {
             throw NSError(domain: "auth", code: 401)
         }
 
-        guard let url = NetworkRoutes.mapGroupRanking(groupId: groupId).url else {
+        guard let baseURL = NetworkRoutes.mapGroupRanking(groupId: groupId).url else {
             throw ConfigurationError.nilObject
         }
+        let url = urlWithLocalDate(baseURL)
 
         return try await networkHandler.request(
             url,
@@ -265,6 +267,30 @@ final class MapService {
 }
 
 private extension MapService {
+    static var localDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    static func localDateString(for date: Date = Date()) -> String {
+        localDateFormatter.string(from: date)
+    }
+
+    func urlWithLocalDate(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "date", value: Self.localDateString()))
+        components.queryItems = queryItems
+        return components.url ?? url
+    }
+
     func trackQuality(from signalQuality: String?) -> TrackQuality {
         switch signalQuality {
         case "good":

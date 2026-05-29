@@ -25,9 +25,23 @@ extension FriendsViewController {
 }
 
 extension FriendsViewController.ViewModel {
+    private static var localDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    private static func localDateString(for date: Date = Date()) -> String {
+        localDateFormatter.string(from: date)
+    }
 
     func cachedLeaderboardSnapshot(period: FriendsViewController.LeaderboardPeriod) -> [FriendLeaderboardItem] {
-        if let cached = cachedLeaderboards[period.rawValue] {
+        let cacheKey = leaderboardMemoryCacheKey(period: period)
+
+        if let cached = cachedLeaderboards[cacheKey] {
             return cached
         }
 
@@ -39,7 +53,7 @@ extension FriendsViewController.ViewModel {
         }
 
         let items = mapLeaderboard(response)
-        cachedLeaderboards[period.rawValue] = items
+        cachedLeaderboards[cacheKey] = items
         return items
     }
 
@@ -65,6 +79,7 @@ extension FriendsViewController.ViewModel {
         var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         var q = comps?.queryItems ?? []
         q.append(URLQueryItem(name: "period", value: period.rawValue))
+        q.append(URLQueryItem(name: "date", value: Self.localDateString()))
         comps?.queryItems = q
 
         guard let url = comps?.url else {
@@ -101,7 +116,11 @@ extension FriendsViewController.ViewModel {
     }
 
     private func leaderboardCacheKey(period: FriendsViewController.LeaderboardPeriod) -> String {
-        "friends.leaderboard.\(accountCacheKey).\(period.rawValue)"
+        "friends.leaderboard.\(accountCacheKey).\(leaderboardMemoryCacheKey(period: period))"
+    }
+
+    private func leaderboardMemoryCacheKey(period: FriendsViewController.LeaderboardPeriod) -> String {
+        "\(period.rawValue).\(Self.localDateString())"
     }
 
     private func leaderboardCacheDateKey(period: FriendsViewController.LeaderboardPeriod) -> String {
@@ -121,7 +140,7 @@ extension FriendsViewController.ViewModel {
         period: FriendsViewController.LeaderboardPeriod
     ) {
         let items = mapLeaderboard(response)
-        cachedLeaderboards[period.rawValue] = items
+        cachedLeaderboards[leaderboardMemoryCacheKey(period: period)] = items
 
         guard let data = try? JSONEncoder().encode(response) else { return }
         UserDefaults.standard.set(data, forKey: leaderboardCacheKey(period: period))

@@ -62,6 +62,18 @@ extension GroupsViewController {
 }
 
 extension GroupsViewController.ViewModel {
+    private static var localDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    private static func localDateString(for date: Date = Date()) -> String {
+        localDateFormatter.string(from: date)
+    }
 
     func cachedGroupsSnapshot() -> [GroupListItem] {
         guard
@@ -78,11 +90,19 @@ extension GroupsViewController.ViewModel {
         let route = NetworkRoutes.groups
 
         guard
-            let url = route.url,
+            let baseURL = route.url,
             let accessToken = tokenStorage.get()?.accessToken
         else {
             print("No url/access token found")
             return []
+        }
+
+        var url = baseURL
+        if var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) {
+            var queryItems = components.queryItems ?? []
+            queryItems.append(URLQueryItem(name: "date", value: Self.localDateString()))
+            components.queryItems = queryItems
+            url = components.url ?? baseURL
         }
 
         do {
@@ -124,7 +144,7 @@ extension GroupsViewController.ViewModel {
             .replacingOccurrences(of: "=", with: "")
             .prefix(36)
 
-        return "groups.list.\(accountKey)"
+        return "groups.list.\(accountKey).\(Self.localDateString())"
     }
 
     private func saveGroupsSnapshot(_ groups: [GroupListItem]) {

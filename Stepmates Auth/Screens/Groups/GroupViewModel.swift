@@ -108,6 +108,19 @@ extension GroupViewController {
             self.tokenStorage = tokenStorage
         }
 
+        private static var localDateFormatter: DateFormatter {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = .current
+            formatter.dateFormat = "yyyy-MM-dd"
+            return formatter
+        }
+
+        private static func localDateString(for date: Date = Date()) -> String {
+            localDateFormatter.string(from: date)
+        }
+
         func cachedGroupDetailSnapshot() -> GroupDetailResponse? {
             if let cachedDetail {
                 return cachedDetail
@@ -125,7 +138,9 @@ extension GroupViewController {
         }
 
         func cachedLeaderboardSnapshot(period: GroupViewController.LeaderboardPeriod) -> [GroupLeaderboardItem] {
-            if let cached = cachedLeaderboards[period.rawValue] {
+            let cacheKey = leaderboardMemoryCacheKey(period: period)
+
+            if let cached = cachedLeaderboards[cacheKey] {
                 return cached
             }
 
@@ -137,7 +152,7 @@ extension GroupViewController {
             }
 
             let items = mapLeaderboard(response)
-            cachedLeaderboards[period.rawValue] = items
+            cachedLeaderboards[cacheKey] = items
             return items
         }
 
@@ -187,10 +202,18 @@ extension GroupViewController {
             )
 
             guard
-                let url = route.url,
+                let baseURL = route.url,
                 let accessToken = tokenStorage.get()?.accessToken
             else {
                 return []
+            }
+
+            var url = baseURL
+            if var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) {
+                var queryItems = components.queryItems ?? []
+                queryItems.append(URLQueryItem(name: "date", value: Self.localDateString()))
+                components.queryItems = queryItems
+                url = components.url ?? baseURL
             }
 
             do {
@@ -269,7 +292,11 @@ extension GroupViewController {
         }
 
         private func leaderboardCacheKey(period: GroupViewController.LeaderboardPeriod) -> String {
-            "group.leaderboard.\(accountCacheKey).\(group.id).\(period.rawValue)"
+            "group.leaderboard.\(accountCacheKey).\(group.id).\(leaderboardMemoryCacheKey(period: period))"
+        }
+
+        private func leaderboardMemoryCacheKey(period: GroupViewController.LeaderboardPeriod) -> String {
+            "\(period.rawValue).\(Self.localDateString())"
         }
 
         private func leaderboardCacheDateKey(period: GroupViewController.LeaderboardPeriod) -> String {
@@ -296,7 +323,7 @@ extension GroupViewController {
             period: GroupViewController.LeaderboardPeriod
         ) {
             let items = mapLeaderboard(response)
-            cachedLeaderboards[period.rawValue] = items
+            cachedLeaderboards[leaderboardMemoryCacheKey(period: period)] = items
 
             guard let data = try? JSONEncoder().encode(response) else { return }
             UserDefaults.standard.set(data, forKey: leaderboardCacheKey(period: period))
