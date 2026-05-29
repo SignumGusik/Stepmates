@@ -1,0 +1,11 @@
+[run]
+source = api
+omit =
+    api/migrations/*
+    api/test_*.py
+    api/tests.py
+
+[report]
+show_missing = True
+skip_covered = True
+fail_under = 60

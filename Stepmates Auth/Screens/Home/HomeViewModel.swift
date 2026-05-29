@@ -15,7 +15,7 @@ struct HomeNotificationCounterDTO: Decodable {
     let id: Int
 }
 
-struct HomeCounters {
+struct HomeCounters: Codable {
     let friendsCount: Int
     let groupsCount: Int
     let notificationsCount: Int
@@ -75,7 +75,7 @@ extension HomeViewController.ViewModel {
         infoText = responseData.message
     }
 
-    func syncTodaySteps(_ steps: Int) async -> SyncTodayStepsResponse? {
+    func syncTodaySteps(_ steps: Int, date: Date = Date()) async -> SyncTodayStepsResponse? {
         let route = NetworkRoutes.syncTodaySteps
         let method = route.method
 
@@ -88,7 +88,10 @@ extension HomeViewController.ViewModel {
         do {
             return try await networkHandler.request(
                 url,
-                jsonDictionary: ["steps": steps],
+                jsonDictionary: [
+                    "steps": steps,
+                    "date": Self.stepsDateFormatter.string(from: date)
+                ],
                 responseType: SyncTodayStepsResponse.self,
                 httpMethod: method.rawValue,
                 accessToken: accessToken.accessToken
@@ -98,6 +101,15 @@ extension HomeViewController.ViewModel {
             return nil
         }
     }
+
+    private static let stepsDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 
     func loadTodayStepsState() async -> SyncTodayStepsResponse? {
         let route = NetworkRoutes.myTodaySteps
@@ -137,8 +149,25 @@ extension HomeViewController.ViewModel {
         )
     }
 
-    func loadHomeCounters() async -> HomeCounters {
-        if let cachedHomeCounters,
+    func cachedHomeCountersSnapshot() -> HomeCounters? {
+        if let cachedHomeCounters {
+            return cachedHomeCounters
+        }
+
+        guard
+            let data = UserDefaults.standard.data(forKey: homeCountersCacheKey),
+            let counters = try? JSONDecoder().decode(HomeCounters.self, from: data)
+        else {
+            return nil
+        }
+
+        cachedHomeCounters = counters
+        return counters
+    }
+
+    func loadHomeCounters(force: Bool = false) async -> HomeCounters {
+        if !force,
+           let cachedHomeCounters,
            let cachedHomeCountersAt,
            Date().timeIntervalSince(cachedHomeCountersAt) < homeCountersCacheTTL {
             return cachedHomeCounters
@@ -161,7 +190,25 @@ extension HomeViewController.ViewModel {
 
         cachedHomeCounters = counters
         cachedHomeCountersAt = Date()
+        saveHomeCountersSnapshot(counters)
         return counters
+    }
+
+    private var homeCountersCacheKey: String {
+        let rawKey = tokenStorage.get()?.refreshToken ?? username
+        let accountKey = Data(rawKey.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+            .prefix(36)
+
+        return "home.counters.\(accountKey)"
+    }
+
+    private func saveHomeCountersSnapshot(_ counters: HomeCounters) {
+        guard let data = try? JSONEncoder().encode(counters) else { return }
+        UserDefaults.standard.set(data, forKey: homeCountersCacheKey)
     }
 
     private func loadProfileSummary() async -> HomeProfileSummary {
@@ -226,11 +273,15 @@ extension HomeViewController.ViewModel {
         let route = NetworkRoutes.groups
 
         guard
-            let url = route.url,
+            let baseURL = route.url,
             let accessToken = tokenStorage.get()?.accessToken
         else {
             return 0
         }
+
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "compact", value: "1")]
+        let url = components?.url ?? baseURL
 
         do {
             let groups = try await networkHandler.request(

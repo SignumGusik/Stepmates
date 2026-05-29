@@ -1,0 +1,37 @@
+{
+  "configurations" : [
+    {
+      "id" : "2B67B805-E73A-4F29-BD11-9BE998037967",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Stepmates Auth.xcodeproj",
+      "identifier" : "D4D3B5762F4A25E400233376",
+      "name" : "Stepmates Auth"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Stepmates Auth.xcodeproj",
+        "identifier" : "D4D3B58C2F4A25E600233376",
+        "name" : "Stepmates AuthTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Stepmates Auth.xcodeproj",
+        "identifier" : "D4D3B5962F4A25E600233376",
+        "name" : "Stepmates AuthUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -58,6 +58,7 @@ final class MapViewController: UIViewController {
     private let scopeChipsView = MapScopeChipsView()
     private var scopeChipsBottomConstraint: NSLayoutConstraint?
     private let stepsCardView = MapStepsCardView()
+    private var isStepProviderActive = false
 
     private var isMapScreenActive = false
     private var isFollowModeEnabled = true
@@ -128,9 +129,10 @@ final class MapViewController: UIViewController {
         trackingManager.addObserver(self)
         startFriendsPolling()
         startSignalPolling()
+        startLocalStepsUpdates()
 
         Task {
-            await viewModel.reloadScopeData()
+            await viewModel.reloadScopeData(includeRanking: false)
         }
     }
 
@@ -141,6 +143,7 @@ final class MapViewController: UIViewController {
         trackingManager.removeObserver(self)
         stopFriendsPolling()
         stopSignalPolling()
+        stopLocalStepsUpdates()
         stopPulse()
         routeRedrawWorkItem?.cancel()
         routeRedrawWorkItem = nil
@@ -446,6 +449,10 @@ private extension MapViewController {
                 self.view.layoutIfNeeded()
             }
         }
+
+        if let snapshot = StepCountProvider.shared.cachedSnapshot() {
+            stepsCardView.applyLocalSteps(snapshot.steps)
+        }
     }
 
     func setupSignalBadge() {
@@ -660,8 +667,30 @@ private extension MapViewController {
 
     @objc func onFriendsTimer() {
         Task {
-            await viewModel.reloadScopeData()
+            await viewModel.reloadScopeData(includeRanking: false)
         }
+    }
+
+    func startLocalStepsUpdates() {
+        guard isStepProviderActive == false else { return }
+        isStepProviderActive = true
+
+        if let snapshot = StepCountProvider.shared.cachedSnapshot() {
+            stepsCardView.applyLocalSteps(snapshot.steps)
+        }
+
+        StepCountProvider.shared.start(
+            onUpdate: { [weak self] snapshot in
+                self?.stepsCardView.applyLocalSteps(snapshot.steps)
+            },
+            onUnavailable: { _ in }
+        )
+    }
+
+    func stopLocalStepsUpdates() {
+        guard isStepProviderActive else { return }
+        isStepProviderActive = false
+        StepCountProvider.shared.stop()
     }
 }
 

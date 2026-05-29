@@ -181,6 +181,7 @@ final class TrackingManager: NSObject {
                     movementState: confidence.movementKind.rawValue,
                     isSharing: self.isSharingLocation
                 )
+                StepSyncManager.shared.syncRecentDays(reason: "live_location")
             } catch {
                 print("Live location send error:", error.localizedDescription)
             }

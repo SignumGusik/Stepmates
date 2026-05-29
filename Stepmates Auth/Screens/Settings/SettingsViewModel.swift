@@ -104,13 +104,13 @@ extension SettingsViewController {
                 return local
             }
 
-            guard let urlString = profile.avatarUrl,
-                  let remoteURL = URL(string: urlString) else {
+            guard let urlString = profile.avatarUrl else {
                 return nil
             }
 
-            let (data, _) = try await URLSession.shared.data(from: remoteURL)
-            guard let image = UIImage(data: data) else { return nil }
+            guard let image = await AvatarLoader.shared.loadImage(urlString: urlString) else {
+                return nil
+            }
 
             saveAvatarImage(image)
             return image

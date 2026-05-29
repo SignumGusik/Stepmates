@@ -880,6 +880,49 @@ def ensure_not_last_admin(group: Group, user_id: int):
         raise ValidationError({"non_field_errors": ["Нельзя удалить/понизить последнего админа."]})
 
 
+def build_group_list_stats(groups, user_id: int):
+    today = timezone.localdate()
+    member_ids_by_group = {}
+    all_member_ids = set()
+    stats = {}
+
+    for group in groups:
+        memberships = list(group.memberships.all())
+        member_ids = [membership.user_id for membership in memberships]
+        member_ids_by_group[group.id] = member_ids
+        all_member_ids.update(member_ids)
+
+        stats[group.id] = {
+            "members_count": len(member_ids),
+            "is_admin": any(
+                membership.user_id == user_id and membership.is_admin
+                for membership in memberships
+            ),
+            "my_place": None,
+        }
+
+    steps_rows = (
+        DailySteps.objects
+        .filter(user_id__in=all_member_ids, date=today)
+        .values("user_id")
+        .annotate(total_steps=Sum("steps"))
+    )
+    steps_map = {
+        row["user_id"]: row["total_steps"] or 0
+        for row in steps_rows
+    }
+
+    for group_id, member_ids in member_ids_by_group.items():
+        sorted_ids = sorted(
+            member_ids,
+            key=lambda member_id: (-steps_map.get(member_id, 0), member_id)
+        )
+        if user_id in sorted_ids:
+            stats[group_id]["my_place"] = sorted_ids.index(user_id) + 1
+
+    return stats
+
+
 class GroupsAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -889,9 +932,19 @@ class GroupsAPI(APIView):
             .filter(memberships__user=request.user)
             .exclude(hidden_by__user=request.user)
             .distinct()
+            .prefetch_related("memberships")
             .order_by("-created_at")
         )
-        return Response(GroupListSerializer(qs, many=True, context={"request": request}).data)
+
+        if str(request.query_params.get("compact", "")).lower() in ("1", "true", "yes"):
+            return Response(list(qs.values("id")))
+
+        groups = list(qs)
+        context = {
+            "request": request,
+            "group_list_stats": build_group_list_stats(groups, request.user.id),
+        }
+        return Response(GroupListSerializer(groups, many=True, context=context).data)
 
     def post(self, request):
         ser = GroupCreateSerializer(data=request.data)
@@ -987,7 +1040,14 @@ class GroupAddMemberAPI(APIView):
         )
 
         if not created:
-            raise ValidationError({"user_id": ["Приглашение уже отправлено."]})
+            return Response(
+                {
+                    "detail": "Вы уже отправляли пользователю приглашение.",
+                    "code": "group_invite_already_sent",
+                    "user_id": ["Приглашение уже отправлено."],
+                },
+                status=400,
+            )
 
         return Response(
             GroupDetailSerializer(group, context={"request": request}).data,
@@ -1239,7 +1299,8 @@ class DailyStepsSyncApi(GenericAPIView):
         steps = serializer.validated_data["steps"]
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
-        daily_steps, _ = DailySteps.objects.update_or_create(
+        today = timezone.localdate()
+        daily_steps, created = DailySteps.objects.get_or_create(
             user=request.user,
             date=date,
             defaults={
@@ -1247,6 +1308,25 @@ class DailyStepsSyncApi(GenericAPIView):
                 "goal_steps": profile.daily_goal_steps,
             },
         )
+
+        if not created:
+            update_fields = []
+
+            # Never let a stale/partial mobile sync wipe a completed day.
+            # The app can read 0 or a lower value during permission/provider
+            # switches, especially around midnight, so the server keeps the
+            # best value received for that date.
+            if steps > daily_steps.steps:
+                daily_steps.steps = steps
+                update_fields.append("steps")
+
+            if date == today and daily_steps.goal_steps != profile.daily_goal_steps:
+                daily_steps.goal_steps = profile.daily_goal_steps
+                update_fields.append("goal_steps")
+
+            if update_fields:
+                update_fields.append("updated_at")
+                daily_steps.save(update_fields=update_fields)
 
         return Response(
             DailyStepsSerializer(daily_steps).data,
@@ -1723,7 +1803,7 @@ class FriendsLiveLocationApi(APIView):
         for u1, u2 in friend_pairs:
             friend_ids.add(u2 if u1 == me_id else u1)
 
-        fresh_after = timezone.now() - timedelta(minutes=30)
+        fresh_after = timezone.now() - timedelta(hours=24)
         precise_after = timezone.now() - timedelta(minutes=5)
 
         qs = (
@@ -2245,15 +2325,19 @@ class MapGroupsApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        groups = (
+        groups = list(
             Group.objects
             .filter(memberships__user=request.user)
             .prefetch_related("memberships")
             .order_by("name")
         )
+        context = {
+            "request": request,
+            "group_list_stats": build_group_list_stats(groups, request.user.id),
+        }
 
         return Response(
-            GroupListSerializer(groups, many=True, context={"request": request}).data,
+            GroupListSerializer(groups, many=True, context=context).data,
             status=status.HTTP_200_OK,
         )
 
@@ -2275,7 +2359,7 @@ class GroupLiveLocationApi(APIView):
         )
 
         now = timezone.now()
-        freshness_limit = now - timedelta(minutes=30)
+        freshness_limit = now - timedelta(hours=24)
         precise_after = now - timedelta(minutes=5)
 
         locations = (

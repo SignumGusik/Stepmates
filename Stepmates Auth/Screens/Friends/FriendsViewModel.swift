@@ -77,7 +77,6 @@ extension FriendsViewController.ViewModel {
             Constants.orange ?? .orange,
             Constants.blue ?? .blue,
             UIColor(hex: "#D8DDF8") ?? .systemGray4,
-            UIColor(hex: "#000000") ?? .black,
             UIColor(hex: "#D7A692") ?? .brown
         ]
 

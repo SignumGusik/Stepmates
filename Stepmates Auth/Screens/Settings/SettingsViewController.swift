@@ -89,6 +89,7 @@ final class SettingsViewController: UIViewController {
     )
     
     private var isEditingMode = false
+    private var isSavingProfile = false
     private var selectedAvatar: UIImage?
 
     private lazy var editButton = UIButton.makeImageButton(
@@ -439,12 +440,26 @@ private extension SettingsViewController {
     func setEditingMode(_ editing: Bool) {
         isEditingMode = editing
 
-        usernameTextField.isEnabled = editing
+        usernameTextField.isEnabled = editing && !isSavingProfile
         avatarEditButton.isHidden = !editing
+        avatarEditButton.isEnabled = !isSavingProfile
         saveEditButton.isHidden = !editing
+        saveEditButton.isEnabled = !isSavingProfile
 
         editButton.isHidden = editing
+        editButton.isEnabled = !isSavingProfile
         closeEditButton.isHidden = !editing
+        closeEditButton.isEnabled = !isSavingProfile
+    }
+
+    func setProfileSaving(_ saving: Bool) {
+        isSavingProfile = saving
+        saveEditButton.setTitle(saving ? "Сохраняю..." : "Сохранить", for: .normal)
+        saveEditButton.alpha = saving ? 0.68 : 1
+        usernameTextField.isEnabled = isEditingMode && !saving
+        avatarEditButton.isEnabled = !saving
+        closeEditButton.isEnabled = !saving
+        editButton.isEnabled = !saving
     }
 }
 
@@ -568,6 +583,9 @@ private extension SettingsViewController {
     }
 
     @objc func onSaveTapped() {
+        guard isSavingProfile == false else { return }
+        setProfileSaving(true)
+
         Task { [weak self] in
             guard let self else { return }
 
@@ -583,12 +601,14 @@ private extension SettingsViewController {
                 let freshProfile = try await self.viewModel.fetchMyProfile()
 
                 await MainActor.run {
+                    self.setProfileSaving(false)
                     self.selectedAvatar = nil
                     self.render(freshProfile)
                     self.setEditingMode(false)
                 }
             } catch {
                 await MainActor.run {
+                    self.setProfileSaving(false)
                     self.showOkAlert(title: "Ошибка", message: self.serverMessage(from: error))
                 }
             }

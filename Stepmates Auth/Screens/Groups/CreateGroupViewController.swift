@@ -19,6 +19,7 @@ final class CreateGroupViewController: UIViewController {
 
     private let viewModel: ViewModel
     private var selectedGroupAvatar: UIImage?
+    private var isCreatingGroup = false
 
     private lazy var titleLabel = UILabel.makeManrope(
         text: "Создать группу",
@@ -275,6 +276,9 @@ private extension CreateGroupViewController {
     }
 
     @objc func onCreateTapped() {
+        guard isCreatingGroup == false else { return }
+        setCreatingGroup(true)
+
         Task { [weak self] in
             guard let self else { return }
 
@@ -285,10 +289,12 @@ private extension CreateGroupViewController {
                     avatar: self.selectedGroupAvatar
                 )
                 await MainActor.run {
+                    self.setCreatingGroup(false)
                     self.navDelegate?.onGroupCreated()
                 }
             } catch {
                 await MainActor.run {
+                    self.setCreatingGroup(false)
                     self.showOkAlert(
                         title: "Не получилось создать группу",
                         message: error.localizedDescription
@@ -297,6 +303,18 @@ private extension CreateGroupViewController {
             }
         }
         
+    }
+
+    func setCreatingGroup(_ creating: Bool) {
+        isCreatingGroup = creating
+        createButton.setTitle(creating ? "Сохраняю..." : "Создать группу", for: .normal)
+        createButton.alpha = creating ? 0.72 : 1
+        createButton.isEnabled = !creating
+        nameTextField.isEnabled = !creating
+        goalButton.isEnabled = !creating
+        avatarAddButton.isEnabled = !creating
+        addMemberButton.isEnabled = !creating
+        tableView.isUserInteractionEnabled = !creating
     }
 
     func showDeleteAlert(for indexPath: IndexPath) {

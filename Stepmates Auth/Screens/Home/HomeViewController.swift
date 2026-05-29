@@ -26,7 +26,7 @@ class HomeViewController: UIViewController {
     private lazy var logoutButton = UIButton.makeButton(title: "Logout", target: self, action: #selector(self.onLogoutTapped))
     private lazy var friendsButton = UIButton.makeHomeInfoButton(
         title: "Друзья",
-        subtitle: "0 друзей",
+        subtitle: "загрузка",
         imageName: "friends",
         backgroundColor: Constants.purple ?? .systemBlue,
         target: self,
@@ -34,7 +34,7 @@ class HomeViewController: UIViewController {
     )
     private lazy var groupsButton = UIButton.makeHomeInfoButton(
         title: "Группы",
-        subtitle: "0 групп",
+        subtitle: "загрузка",
         imageName: "groups",
         backgroundColor: Constants.blue ?? .systemBlue,
         target: self,
@@ -187,6 +187,9 @@ class HomeViewController: UIViewController {
     private var stepCounterTargetValue = 0
     private var stepCounterStartedAt = Date()
     private let stepCounterDuration: TimeInterval = 0.34
+    private var isLoadingHomeCounters = false
+    private var lastHomeCountersLoadAt = Date.distantPast
+    private let homeCountersReloadInterval: TimeInterval = 25
 
     weak var navDelegate: HomeNavDelegate?
     private let viewModel: ViewModel
@@ -218,13 +221,14 @@ extension HomeViewController {
         setupNavBar()
         setupObservers()
         setupAppStateObservers()
+        applyCachedHomeCountersIfAvailable()
         loadHomeCounters()
         loadTodayStepsState()
     }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         isHomeVisible = true
-        loadHomeCounters()
+        loadHomeCounters(force: true)
         loadTodayStepsState()
         setupStepCounting()
     }
@@ -539,6 +543,21 @@ private extension HomeViewController {
         }
 
         observers.append(observer)
+
+        let stepSyncObserver = NotificationCenter.default.addObserver(
+            forName: .stepSyncDidUpdateRecentDays,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.isHomeVisible else {
+                return
+            }
+
+            self.loadHomeCounters(force: true)
+            self.loadTodayStepsState()
+        }
+
+        observers.append(stepSyncObserver)
 
         let backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
@@ -895,13 +914,26 @@ private extension HomeViewController {
         }
     }
 
-    func loadHomeCounters() {
+    func applyCachedHomeCountersIfAvailable() {
+        guard let counters = viewModel.cachedHomeCountersSnapshot() else { return }
+        updateHomeCounters(counters)
+    }
+
+    func loadHomeCounters(force: Bool = false) {
+        guard isLoadingHomeCounters == false else { return }
+
+        let elapsed = Date().timeIntervalSince(lastHomeCountersLoadAt)
+        guard force || elapsed >= homeCountersReloadInterval else { return }
+
+        isLoadingHomeCounters = true
         Task { [weak self] in
             guard let self else { return }
 
-            let counters = await viewModel.loadHomeCounters()
+            let counters = await viewModel.loadHomeCounters(force: force)
 
             await MainActor.run {
+                self.isLoadingHomeCounters = false
+                self.lastHomeCountersLoadAt = Date()
                 self.updateHomeCounters(counters)
             }
         }
@@ -1161,6 +1193,7 @@ private extension HomeViewController {
                     }
 
                     self.hideGoalEditor()
+                    self.loadHomeCounters(force: true)
                 }
             } catch {
                 await MainActor.run {

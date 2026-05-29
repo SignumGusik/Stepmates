@@ -19,6 +19,7 @@ final class CreateGroupMemberCell: UITableViewCell {
     weak var delegate: CreateGroupMemberCellDelegate?
 
     private var avatarTask: URLSessionDataTask?
+    private var currentAvatarUrl: String?
     private let containerView = UIView()
     private let avatarView = UIView.makeAvatarImageView(size: 34)
     private var textRightToDeleteConstraint: NSLayoutConstraint?
@@ -64,6 +65,7 @@ final class CreateGroupMemberCell: UITableViewCell {
 
         avatarTask?.cancel()
         avatarTask = nil
+        currentAvatarUrl = nil
 
         avatarView.image = nil
         avatarView.backgroundColor = .systemGray5
@@ -93,31 +95,22 @@ final class CreateGroupMemberCell: UITableViewCell {
         loadAvatarIfNeeded(for: member)
     }
     func loadAvatarIfNeeded(for member: GroupDraftMember) {
-        guard
-            let avatarUrl = member.avatarUrl,
-            let url = URL(string: avatarUrl)
-        else {
+        guard let avatarUrl = member.avatarUrl, avatarUrl.isEmpty == false else {
             return
         }
 
         avatarTask?.cancel()
+        currentAvatarUrl = avatarUrl
 
-        avatarTask = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard
-                let self,
-                let data,
-                let image = UIImage(data: data)
-            else {
-                return
-            }
+        avatarTask = AvatarLoader.shared.load(urlString: avatarUrl) { [weak self] image in
+            guard let self else { return }
+            guard self.currentAvatarUrl == avatarUrl else { return }
 
-            DispatchQueue.main.async {
+            if let image {
                 self.avatarView.image = image
                 self.avatarView.backgroundColor = .clear
             }
         }
-
-        avatarTask?.resume()
     }
 }
 

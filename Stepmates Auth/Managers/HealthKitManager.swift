@@ -58,15 +58,18 @@ final class HealthKitManager {
     }
     
     func fetchTodaySteps(completion: @escaping (Double) -> Void) {
+        fetchSteps(from: Calendar.current.startOfDay(for: Date()), to: Date(), completion: completion)
+    }
+
+    func fetchSteps(from startDate: Date, to endDate: Date, completion: @escaping (Double) -> Void) {
         guard let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
             completion(0)
             return
         }
-        
-        let startOfDay = Calendar.current.startOfDay(for: Date())
+
         let predicate = HKQuery.predicateForSamples(
-            withStart: startOfDay,
-            end: Date(),
+            withStart: startDate,
+            end: endDate,
             options: .strictStartDate
         )
         

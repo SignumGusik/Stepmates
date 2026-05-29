@@ -3,13 +3,18 @@ Django settings for ios_auth project.
 """
 
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 
-import dj_database_url
-
+try:
+    import dj_database_url
+except ImportError:  # local test env can skip Render-only dependency
+    dj_database_url = None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+IS_TESTING = "test" in sys.argv
+SILENCED_SYSTEM_CHECKS = ["fields.E210"] if IS_TESTING else []
 
 
 SECRET_KEY = os.getenv(
@@ -36,9 +41,10 @@ CSRF_TRUSTED_ORIGINS = (
 )
 
 
+STORAGE_APPS = [] if IS_TESTING else ["cloudinary", "cloudinary_storage"]
+
 INSTALLED_APPS = [
-    "cloudinary",
-    "cloudinary_storage",
+    *STORAGE_APPS,
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -65,6 +71,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+if IS_TESTING:
+    MIDDLEWARE = [item for item in MIDDLEWARE if not item.startswith("whitenoise.")]
+
 
 ROOT_URLCONF = "ios_auth.urls"
 
@@ -90,7 +99,16 @@ WSGI_APPLICATION = "ios_auth.wsgi.application"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-if DATABASE_URL:
+if IS_TESTING:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+elif DATABASE_URL:
+    if dj_database_url is None:
+        raise RuntimeError("dj_database_url is required when DATABASE_URL is set")
     DATABASES = {
         "default": dj_database_url.config(
             default=DATABASE_URL,
@@ -193,13 +211,23 @@ CLOUDINARY_STORAGE = {
     "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET"),
 }
 
-STORAGES = {
-    "default": {
-        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-    },
-}
+if IS_TESTING:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"

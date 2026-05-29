@@ -87,6 +87,14 @@ final class AvatarLoader {
         }
     }
 
+    func loadImage(urlString: String) async -> UIImage? {
+        await withCheckedContinuation { continuation in
+            _ = load(urlString: urlString) { image in
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
     private func imageFromDisk(urlString: String) -> UIImage? {
         guard let fileURL = fileURL(for: urlString),
               FileManager.default.fileExists(atPath: fileURL.path),

@@ -123,8 +123,9 @@ private extension FriendLeaderboardCell {
             return
         }
 
-        let blue = (Constants.blue ?? .systemBlue)
-        let gray = UIColor.systemGray5
+        let blue = Constants.blue ?? .systemBlue
+        let gray = UIColor(hex: "#E9E9E9") ?? UIColor(white: 0.92, alpha: 1)
+        let grayPlace = UIColor(hex: "#DDDDDD") ?? UIColor(white: 0.86, alpha: 1)
 
         switch place {
         case 1:
@@ -138,7 +139,7 @@ private extension FriendLeaderboardCell {
             placeContainerView.backgroundColor = blue.withAlphaComponent(0.60)
         default:
             cardView.backgroundColor = gray
-            placeContainerView.backgroundColor = UIColor.systemGray4
+            placeContainerView.backgroundColor = grayPlace
         }
     }
 

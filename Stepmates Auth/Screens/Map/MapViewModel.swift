@@ -33,13 +33,15 @@ final class MapViewModel {
 
     func loadInitialData() async {
         await loadGroups()
-        await reloadScopeData()
+        await reloadScopeData(includeRanking: true)
     }
 
-    func reloadScopeData() async {
+    func reloadScopeData(includeRanking: Bool = true) async {
         await loadVisibleUsers()
         await loadVisibleTracks()
-        await loadRankingCard()
+        if includeRanking {
+            await loadRankingCard()
+        }
     }
 
     func loadGroups() async {

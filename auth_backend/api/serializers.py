@@ -127,6 +127,10 @@ class GroupListSerializer(serializers.ModelSerializer):
         ]
 
     def get_is_admin(self, obj):
+        stats = self.context.get("group_list_stats", {}).get(obj.id)
+        if stats is not None:
+            return stats["is_admin"]
+
         user = self.context["request"].user
         m = obj.memberships.filter(user=user).only("is_admin").first()
         return bool(m and m.is_admin)
@@ -140,9 +144,17 @@ class GroupListSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(url) if request else url
 
     def get_members_count(self, obj):
+        stats = self.context.get("group_list_stats", {}).get(obj.id)
+        if stats is not None:
+            return stats["members_count"]
+
         return obj.memberships.count()
 
     def get_my_place(self, obj):
+        stats = self.context.get("group_list_stats", {}).get(obj.id)
+        if stats is not None:
+            return stats["my_place"]
+
         from django.db.models import Sum
 
         request = self.context["request"]

@@ -13,6 +13,152 @@ enum StepCountSource: Equatable {
     case pedometer
 }
 
+extension Notification.Name {
+    static let stepSyncDidUpdateRecentDays = Notification.Name("stepSyncDidUpdateRecentDays")
+}
+
+final class StepSyncManager {
+    static let shared = StepSyncManager()
+
+    private let tokenStorage = AccessTokenStorage()
+    private lazy var networkHandler = NetworkHandler(tokenStorage: tokenStorage)
+    private var isSyncing = false
+
+    private let todaySyncInterval: TimeInterval = 15 * 60
+    private let pastDaySyncInterval: TimeInterval = 6 * 60 * 60
+
+    private lazy var dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private init() {}
+
+    func syncRecentDays(
+        reason: String,
+        daysBack: Int = 2,
+        force: Bool = false,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        guard tokenStorage.get() != nil else {
+            completion?(false)
+            return
+        }
+
+        guard isSyncing == false else {
+            completion?(false)
+            return
+        }
+
+        let calendar = Calendar.current
+        let dates = (0...max(0, daysBack)).compactMap {
+            calendar.date(byAdding: .day, value: -$0, to: Date())
+        }
+
+        let candidates = dates.filter { force || shouldSync(date: $0) }
+        guard candidates.isEmpty == false else {
+            completion?(false)
+            return
+        }
+
+        isSyncing = true
+        syncNext(dates: candidates, didSyncAny: false, completion: completion)
+    }
+
+    private func syncNext(
+        dates: [Date],
+        didSyncAny: Bool,
+        completion: ((Bool) -> Void)?
+    ) {
+        guard let date = dates.first else {
+            isSyncing = false
+            if didSyncAny {
+                NotificationCenter.default.post(name: .stepSyncDidUpdateRecentDays, object: nil)
+            }
+            completion?(didSyncAny)
+            return
+        }
+
+        let remainingDates = Array(dates.dropFirst())
+
+        StepCountProvider.shared.fetchSteps(for: date) { [weak self] snapshot in
+            guard let self else { return }
+
+            guard let snapshot, snapshot.steps > 0 else {
+                self.markSyncAttempt(date: date)
+                self.syncNext(dates: remainingDates, didSyncAny: didSyncAny, completion: completion)
+                return
+            }
+
+            Task {
+                let didSync = await self.upload(steps: snapshot.steps, date: date)
+
+                await MainActor.run {
+                    self.markSyncAttempt(date: date)
+
+                    self.syncNext(
+                        dates: remainingDates,
+                        didSyncAny: didSyncAny || didSync,
+                        completion: completion
+                    )
+                }
+            }
+        }
+    }
+
+    private func upload(steps: Int, date: Date) async -> Bool {
+        guard let routeURL = NetworkRoutes.syncTodaySteps.url,
+              let token = tokenStorage.get() else {
+            return false
+        }
+
+        do {
+            _ = try await networkHandler.request(
+                routeURL,
+                jsonDictionary: [
+                    "steps": steps,
+                    "date": dateFormatter.string(from: date)
+                ],
+                responseType: SyncTodayStepsResponse.self,
+                httpMethod: NetworkRoutes.syncTodaySteps.method.rawValue,
+                accessToken: token.accessToken
+            )
+            return true
+        } catch {
+            print("StepSyncManager upload error:", error.localizedDescription)
+            return false
+        }
+    }
+
+    private func shouldSync(date: Date) -> Bool {
+        let lastSyncAt = UserDefaults.standard.object(forKey: lastSyncKey(date: date)) as? Date
+        guard let lastSyncAt else { return true }
+
+        let interval = Calendar.current.isDateInToday(date) ? todaySyncInterval : pastDaySyncInterval
+        return Date().timeIntervalSince(lastSyncAt) >= interval
+    }
+
+    private func markSyncAttempt(date: Date) {
+        UserDefaults.standard.set(Date(), forKey: lastSyncKey(date: date))
+    }
+
+    private func lastSyncKey(date: Date) -> String {
+        let rawAccountKey = tokenStorage.get()?.refreshToken ?? "anonymous"
+        let accountKey = Data(rawAccountKey.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+            .prefix(36)
+
+        return "steps.last-sync.\(accountKey).\(dateFormatter.string(from: date))"
+    }
+}
+
 struct StepCountSnapshot {
     let steps: Int
     let source: StepCountSource
@@ -57,6 +203,22 @@ final class StepCountProvider {
         }
 
         refreshPedometerOnly()
+    }
+
+    func cachedSnapshot() -> StepCountSnapshot? {
+        guard let lastPublishedSource else { return nil }
+        return StepCountSnapshot(steps: lastPublishedSteps, source: lastPublishedSource)
+    }
+
+    func fetchSteps(
+        for date: Date,
+        completion: @escaping (StepCountSnapshot?) -> Void
+    ) {
+        let calendar = Calendar.current
+        let startDate = calendar.startOfDay(for: date)
+        let endDate = min(calendar.date(byAdding: .day, value: 1, to: startDate) ?? Date(), Date())
+
+        fetchSteps(from: startDate, to: endDate, completion: completion)
     }
 
     func stop() {
@@ -203,8 +365,20 @@ private extension StepCountProvider {
         }
 
         let startOfDay = Calendar.current.startOfDay(for: Date())
+        queryPedometerSteps(from: startOfDay, to: Date(), completion: completion)
+    }
 
-        pedometer.queryPedometerData(from: startOfDay, to: Date()) { data, error in
+    func queryPedometerSteps(
+        from startDate: Date,
+        to endDate: Date,
+        completion: @escaping (Int?, Error?) -> Void
+    ) {
+        guard CMPedometer.isStepCountingAvailable() else {
+            completion(nil, nil)
+            return
+        }
+
+        pedometer.queryPedometerData(from: startDate, to: endDate) { data, error in
             DispatchQueue.main.async {
                 if let data {
                     completion(max(0, data.numberOfSteps.intValue), error)
@@ -212,6 +386,53 @@ private extension StepCountProvider {
                     completion(nil, error)
                 }
             }
+        }
+    }
+
+    func fetchSteps(
+        from startDate: Date,
+        to endDate: Date,
+        completion: @escaping (StepCountSnapshot?) -> Void
+    ) {
+        guard startDate < endDate else {
+            completion(nil)
+            return
+        }
+
+        var healthResult: Int?
+        var pedometerResult: Int?
+        var didReceivePedometer = false
+
+        func finishIfReady() {
+            guard healthResult != nil, didReceivePedometer else { return }
+
+            let healthSteps = healthResult ?? 0
+            let pedometerSteps = pedometerResult
+
+            if let pedometerSteps, pedometerSteps >= healthSteps {
+                completion(StepCountSnapshot(steps: pedometerSteps, source: .pedometer))
+            } else {
+                completion(StepCountSnapshot(steps: healthSteps, source: .healthKit))
+            }
+        }
+
+        if !shouldSkipHealthKit, HealthKitManager.shared.isHealthDataAvailable() {
+            HealthKitManager.shared.fetchSteps(from: startDate, to: endDate) { steps in
+                healthResult = max(0, Int(steps))
+                finishIfReady()
+            }
+        } else {
+            healthResult = 0
+        }
+
+        queryPedometerSteps(from: startDate, to: endDate) { steps, error in
+            if let error {
+                print("Historical CMPedometer steps error:", error.localizedDescription)
+            }
+
+            pedometerResult = steps
+            didReceivePedometer = true
+            finishIfReady()
         }
     }
 

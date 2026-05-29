@@ -33,7 +33,7 @@ struct GroupResponse: Decodable {
     }
 }
 
-struct GroupListItem {
+struct GroupListItem: Codable {
     let id: Int
     let name: String
     let description: String
@@ -63,6 +63,17 @@ extension GroupsViewController {
 
 extension GroupsViewController.ViewModel {
 
+    func cachedGroupsSnapshot() -> [GroupListItem] {
+        guard
+            let data = UserDefaults.standard.data(forKey: groupsCacheKey),
+            let groups = try? JSONDecoder().decode([GroupListItem].self, from: data)
+        else {
+            return []
+        }
+
+        return groups
+    }
+
     func getGroups() async -> [GroupListItem] {
         let route = NetworkRoutes.groups
 
@@ -82,7 +93,7 @@ extension GroupsViewController.ViewModel {
                 accessToken: accessToken
             )
 
-            return response.map { group in
+            let groups = response.map { group in
                 GroupListItem(
                     id: group.id,
                     name: group.name,
@@ -95,9 +106,29 @@ extension GroupsViewController.ViewModel {
                     goalSteps: group.goalSteps ?? 300_000
                 )
             }
+
+            saveGroupsSnapshot(groups)
+            return groups
         } catch {
             print("groups loading error: \(error)")
-            return []
+            return cachedGroupsSnapshot()
         }
+    }
+
+    private var groupsCacheKey: String {
+        let rawKey = tokenStorage.get()?.refreshToken ?? "anonymous"
+        let accountKey = Data(rawKey.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+            .prefix(36)
+
+        return "groups.list.\(accountKey)"
+    }
+
+    private func saveGroupsSnapshot(_ groups: [GroupListItem]) {
+        guard let data = try? JSONEncoder().encode(groups) else { return }
+        UserDefaults.standard.set(data, forKey: groupsCacheKey)
     }
 }

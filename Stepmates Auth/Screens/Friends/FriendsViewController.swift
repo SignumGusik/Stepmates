@@ -63,6 +63,9 @@ final class FriendsViewController: UIViewController {
     private var items: [FriendLeaderboardItem] = []
     private let viewModel: ViewModel
     private var previousPlacesByUserID: [Int: Int] = [:]
+    private var isLoadingData = false
+    private var lastDataLoadAt = Date.distantPast
+    private let dataReloadInterval: TimeInterval = 20
 
     private var selectedPeriod: LeaderboardPeriod = .today
     private let dropdownOverlay = UIControl()
@@ -97,7 +100,7 @@ extension FriendsViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        loadData()
+        loadData(force: true)
     }
 }
 
@@ -197,12 +200,26 @@ private extension FriendsViewController {
         dropdownHeightConstraint?.isActive = true
     }
 
-    func loadData(isRefreshing: Bool = false) {
+    func loadData(isRefreshing: Bool = false, force: Bool = false) {
+        guard isLoadingData == false else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        let elapsed = Date().timeIntervalSince(lastDataLoadAt)
+        guard force || isRefreshing || items.isEmpty || elapsed >= dataReloadInterval else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        isLoadingData = true
         Task { [weak self] in
             guard let self else { return }
             let result = await viewModel.getLeaderboardItems(period: selectedPeriod)
 
             await MainActor.run {
+                self.isLoadingData = false
+                self.lastDataLoadAt = Date()
                 let movedUpUserIds = Set(
                     result.compactMap { item -> Int? in
                         guard let previousPlace = self.previousPlacesByUserID[item.userId],
@@ -313,7 +330,7 @@ extension FriendsViewController {
     }
 
     @objc func onRefresh() {
-        loadData(isRefreshing: true)
+        loadData(isRefreshing: true, force: true)
     }
 }
 
@@ -378,7 +395,7 @@ extension FriendsViewController: UITableViewDataSource, UITableViewDelegate {
             periodView.setTitle(period.title)
 
             hideDropdown()
-            loadData()
+            loadData(force: true)
             return
         }
         tableView.deselectRow(at: indexPath, animated: true)

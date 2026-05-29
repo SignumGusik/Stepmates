@@ -40,16 +40,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         TrackingManager.shared.configure(mapService: mapService)
         TrackingManager.shared.start()
+        application.setMinimumBackgroundFetchInterval(UIApplication.backgroundFetchIntervalMinimum)
+        StepSyncManager.shared.syncRecentDays(reason: "launch")
         
         return true
+    }
+
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        StepSyncManager.shared.syncRecentDays(reason: "foreground")
     }
     
     func applicationDidEnterBackground(_ application: UIApplication) {
         TrackingManager.shared.flushPendingTrackPoints()
+        StepSyncManager.shared.syncRecentDays(reason: "background")
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
         TrackingManager.shared.flushPendingTrackPoints()
+        StepSyncManager.shared.syncRecentDays(reason: "terminate", force: true)
+    }
+
+    func application(
+        _ application: UIApplication,
+        performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        StepSyncManager.shared.syncRecentDays(reason: "background_fetch", force: true) { didSync in
+            completionHandler(didSync ? .newData : .noData)
+        }
     }
 }
 

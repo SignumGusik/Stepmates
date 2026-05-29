@@ -167,8 +167,8 @@ private extension GroupLeaderboardCell {
             cardView.backgroundColor = orange.withAlphaComponent(0.45)
             placeContainerView.backgroundColor = orange.withAlphaComponent(0.75)
         default:
-            cardView.backgroundColor = UIColor(hex: "#E9E9E9") ?? .systemGray5
-            placeContainerView.backgroundColor = UIColor(hex: "#DDDDDD") ?? .systemGray4
+            cardView.backgroundColor = UIColor(hex: "#E9E9E9") ?? UIColor(white: 0.92, alpha: 1)
+            placeContainerView.backgroundColor = UIColor(hex: "#DDDDDD") ?? UIColor(white: 0.86, alpha: 1)
         }
     }
 

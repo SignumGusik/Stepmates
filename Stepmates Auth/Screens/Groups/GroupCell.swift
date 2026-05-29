@@ -12,6 +12,7 @@ final class GroupCell: UITableViewCell {
     static let reuseId = "GroupCell"
 
     private var avatarTask: URLSessionDataTask?
+    private var currentAvatarUrl: String?
 
     private let containerView = UIView()
     private let avatarImageView = UIView.makeAvatarImageView(size: 56)
@@ -51,6 +52,7 @@ final class GroupCell: UITableViewCell {
 
         avatarTask?.cancel()
         avatarTask = nil
+        currentAvatarUrl = nil
 
         avatarImageView.image = nil
         avatarImageView.backgroundColor = .systemGray5
@@ -123,30 +125,21 @@ private extension GroupCell {
     }
 
     func loadAvatarIfNeeded(_ avatarUrl: String?) {
-        guard
-            let avatarUrl,
-            let url = URL(string: avatarUrl)
-        else {
+        guard let avatarUrl, avatarUrl.isEmpty == false else {
             return
         }
 
         avatarTask?.cancel()
+        currentAvatarUrl = avatarUrl
 
-        avatarTask = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard
-                let self,
-                let data,
-                let image = UIImage(data: data)
-            else {
-                return
-            }
+        avatarTask = AvatarLoader.shared.load(urlString: avatarUrl) { [weak self] image in
+            guard let self else { return }
+            guard self.currentAvatarUrl == avatarUrl else { return }
 
-            DispatchQueue.main.async {
+            if let image {
                 self.avatarImageView.image = image
                 self.avatarImageView.backgroundColor = .clear
             }
         }
-
-        avatarTask?.resume()
     }
 }

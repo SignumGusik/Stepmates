@@ -19,6 +19,9 @@ final class GroupsViewController: UIViewController {
 
     private let viewModel: ViewModel
     private var groups: [GroupListItem] = []
+    private var isLoadingGroups = false
+    private var lastGroupsLoadAt = Date.distantPast
+    private let groupsReloadInterval: TimeInterval = 20
 
 
     private lazy var createGroupButton = UIButton.makeImageButton(
@@ -71,12 +74,19 @@ extension GroupsViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
+        let cachedGroups = viewModel.cachedGroupsSnapshot()
+        if cachedGroups.isEmpty == false {
+            applyGroups(cachedGroups)
+        } else {
+            emptyLabel.isHidden = true
+            tableView.isHidden = false
+        }
         loadGroups()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        loadGroups()
+        loadGroups(force: true)
     }
 }
 
@@ -117,17 +127,36 @@ private extension GroupsViewController {
             .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -20)
     }
 
-    func loadGroups() {
+    func applyGroups(_ result: [GroupListItem]) {
+        groups = result
+        AvatarLoader.shared.prefetch(urlStrings: result.compactMap(\.avatarUrl))
+        tableView.reloadData()
+        updateEmptyState()
+    }
+
+    func loadGroups(force: Bool = false) {
+        guard isLoadingGroups == false else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        let elapsed = Date().timeIntervalSince(lastGroupsLoadAt)
+        guard force || groups.isEmpty || elapsed >= groupsReloadInterval else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        isLoadingGroups = true
         Task { [weak self] in
             guard let self else { return }
 
             let result = await viewModel.getGroups()
 
             await MainActor.run {
-                self.groups = result
-                self.tableView.reloadData()
+                self.isLoadingGroups = false
+                self.lastGroupsLoadAt = Date()
+                self.applyGroups(result)
                 self.refreshControl.endRefreshing()
-                self.updateEmptyState()
             }
         }
     }
@@ -148,7 +177,7 @@ private extension GroupsViewController {
     }
 
     @objc func onRefresh() {
-        loadGroups()
+        loadGroups(force: true)
     }
 }
 

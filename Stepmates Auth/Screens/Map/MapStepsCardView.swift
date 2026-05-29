@@ -20,6 +20,7 @@ final class MapStepsCardView: UIView {
     private var bottomConstraint: NSLayoutConstraint?
     private var isCollapsed = false
     private var previousPlace: Int?
+    private var localStepsOverride: Int?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -50,10 +51,38 @@ final class MapStepsCardView: UIView {
     }
 
     func applyRanking(_ ranking: MapRankingDTO) {
-        let goal = 10_000
+        applyStepsText(steps: localStepsOverride ?? ranking.steps, goal: 10_000)
+
+        let placeText: String
+        if let myPlace = ranking.myPlace {
+            placeText = "\(myPlace) / \(ranking.total)"
+        } else {
+            placeText = "— / \(ranking.total)"
+        }
+
+        applyRankingText(placeText: placeText)
+
+        if let previousPlace,
+           let myPlace = ranking.myPlace,
+           previousPlace > myPlace {
+            animateRankRise()
+        }
+
+        previousPlace = ranking.myPlace
+    }
+
+    func applyLocalSteps(_ steps: Int, goal: Int = 10_000) {
+        localStepsOverride = max(0, steps)
+        applyStepsText(steps: max(0, steps), goal: goal)
+    }
+}
+
+private extension MapStepsCardView {
+
+    func applyStepsText(steps: Int, goal: Int) {
 
         let fullText = NSMutableAttributedString(
-            string: "\(ranking.steps.formattedWithSpaces)",
+            string: "\(steps.formattedWithSpaces)",
             attributes: [
                 .font: UIFont(name: Constants.manropeExtraBold, size: 40)
                     ?? UIFont.systemFont(ofSize: 40, weight: .black),
@@ -73,14 +102,9 @@ final class MapStepsCardView: UIView {
         )
 
         stepsValueLabel.attributedText = fullText
+    }
 
-        let placeText: String
-        if let myPlace = ranking.myPlace {
-            placeText = "\(myPlace) / \(ranking.total)"
-        } else {
-            placeText = "— / \(ranking.total)"
-        }
-
+    func applyRankingText(placeText: String) {
         let rankingText = NSMutableAttributedString(
             string: "Рейтинг на сегодня: ",
             attributes: [
@@ -102,18 +126,7 @@ final class MapStepsCardView: UIView {
         )
 
         rankingButton.setAttributedTitle(rankingText, for: .normal)
-
-        if let previousPlace,
-           let myPlace = ranking.myPlace,
-           previousPlace > myPlace {
-            animateRankRise()
-        }
-
-        previousPlace = ranking.myPlace
     }
-}
-
-private extension MapStepsCardView {
 
     func setup() {
         translatesAutoresizingMaskIntoConstraints = false

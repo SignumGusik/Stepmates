@@ -20,6 +20,7 @@ final class GroupSettingsViewController: UIViewController {
     private let viewModel: ViewModel
 
     private var isEditingMode = false
+    private var isSavingSettings = false
     private var selectedAvatar: UIImage?
 
     private lazy var titleLabel = UILabel.makeManrope(
@@ -313,18 +314,30 @@ private extension GroupSettingsViewController {
 
         let canEdit = viewModel.isAdmin && editing
 
-        nameTextField.isEnabled = canEdit
-        statusTextField.isEnabled = canEdit
-        goalTextField.isEnabled = canEdit
+        nameTextField.isEnabled = canEdit && !isSavingSettings
+        statusTextField.isEnabled = canEdit && !isSavingSettings
+        goalTextField.isEnabled = canEdit && !isSavingSettings
 
         avatarAddButton.isHidden = !canEdit
+        avatarAddButton.isEnabled = !isSavingSettings
         addMemberButton.isHidden = !canEdit
+        addMemberButton.isEnabled = !isSavingSettings
         saveButton.isHidden = !canEdit
+        saveButton.isEnabled = !isSavingSettings
 
         editButton.isHidden = !viewModel.isAdmin || isEditingMode
+        editButton.isEnabled = !isSavingSettings
         closeEditButton.isHidden = !canEdit
+        closeEditButton.isEnabled = !isSavingSettings
 
         tableView.reloadData()
+    }
+
+    func setSavingSettings(_ saving: Bool) {
+        isSavingSettings = saving
+        saveButton.setTitle(saving ? "Сохраняю..." : "Сохранить", for: .normal)
+        saveButton.alpha = saving ? 0.72 : 1
+        setEditingMode(isEditingMode)
     }
 
     func loadAvatar(_ avatarUrl: String?) {
@@ -357,6 +370,39 @@ private extension GroupSettingsViewController {
             .replacingOccurrences(of: " ", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    func friendlyInviteMessage(from error: Error) -> String {
+        guard case let NetworkError.failedStatusCodeResponseData(_, data) = error else {
+            return error.localizedDescription
+        }
+
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let detail = json["detail"] as? String {
+                return detail
+            }
+
+            let messages = json.values.flatMap { value -> [String] in
+                if let text = value as? String { return [text] }
+                if let list = value as? [String] { return list }
+                return []
+            }
+
+            if messages.contains(where: { $0.localizedCaseInsensitiveContains("приглашение") }) {
+                return "Вы уже отправляли пользователю приглашение."
+            }
+
+            if let firstMessage = messages.first {
+                return firstMessage
+            }
+        }
+
+        let rawText = String(data: data, encoding: .utf8) ?? ""
+        if rawText.localizedCaseInsensitiveContains("приглашение") {
+            return "Вы уже отправляли пользователю приглашение."
+        }
+
+        return "Не удалось отправить приглашение. Попробуйте еще раз."
+    }
 }
 
 // MARK: - Public
@@ -371,10 +417,14 @@ extension GroupSettingsViewController {
 
                 await MainActor.run {
                     self.updateTableHeight()
+                    self.showOkAlert(
+                        title: "Приглашение отправлено",
+                        message: "\(user.username) будет добавлен(а) в группу, когда примет приглашение."
+                    )
                 }
             } catch {
                 await MainActor.run {
-                    self.showOkAlert(title: "Ошибка", message: error.localizedDescription)
+                    self.showOkAlert(title: "Не удалось отправить", message: self.friendlyInviteMessage(from: error))
                 }
             }
         }
@@ -423,6 +473,9 @@ private extension GroupSettingsViewController {
     }
 
     @objc func onSaveTapped() {
+        guard isSavingSettings == false else { return }
+        setSavingSettings(true)
+
         Task { [weak self] in
             guard let self else { return }
 
@@ -435,12 +488,14 @@ private extension GroupSettingsViewController {
                 )
 
                 await MainActor.run {
+                    self.setSavingSettings(false)
                     self.selectedAvatar = nil
                     self.render()
                     self.setEditingMode(false)
                 }
             } catch {
                 await MainActor.run {
+                    self.setSavingSettings(false)
                     self.showOkAlert(title: "Ошибка", message: error.localizedDescription)
                 }
             }
