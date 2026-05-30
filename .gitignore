@@ -49,3 +49,11 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
+
+auth_backend/env/
+auth_backend/.venv/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
