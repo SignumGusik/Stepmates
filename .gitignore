@@ -41,3 +41,11 @@ auth_backend/IOS/
 *.pem
 *.key
 *.p8
+
+auth_backend/env/
+auth_backend/.venv/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
