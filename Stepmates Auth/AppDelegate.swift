@@ -72,7 +72,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 private extension AppDelegate {
     func setupYandexMapKit() {
-        YMKMapKit.setApiKey("49293477-49bb-4147-8be5-04e9ca5b077c")
+        guard let apiKey = Bundle.main.object(forInfoDictionaryKey: "YANDEX_MAPKIT_API_KEY") as? String,
+              apiKey.isEmpty == false,
+              apiKey.contains("$(") == false else {
+            assertionFailure("YANDEX_MAPKIT_API_KEY is missing. Add it to local build settings before running the app.")
+            return
+        }
+
+        YMKMapKit.setApiKey(apiKey)
         YMKMapKit.sharedInstance()
     }
 }

@@ -68,95 +68,42 @@ final class LoginViewController: UIViewController {
 extension LoginViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.backButtonTitle = ""
         setupViews()
-        attachEyeButton(to: passwordTextField, tag: 1)
+        passwordTextField.attachPasswordVisibilityToggle(
+            target: self,
+            action: #selector(onEyeTapped(_:)),
+            tag: 1
+        )
     }
 }
 
 // MARK: - View Setup
 private extension LoginViewController {
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
+        layoutAuthHeader(titleLabel: titleLabel, subtitleLabel: subtitleLabel)
 
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailingLessThanOrEqual(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
+        let emailBottomAnchor = layoutFormField(
+            label: emailLabel,
+            textField: emailTextField,
+            below: subtitleLabel.bottomAnchor,
+            topSpacing: 82
+        )
 
-        subtitleLabel
-            .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 10)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailingLessThanOrEqual(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
+        layoutFormField(
+            label: passwordLabel,
+            textField: passwordTextField,
+            below: emailBottomAnchor,
+            topSpacing: 23
+        )
 
-        emailLabel
-            .addTo(view)
-            .pinTop(toAnchor: subtitleLabel.bottomAnchor, constant: 82)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-
-        emailTextField
-            .addTo(view)
-            .pinTop(toAnchor: emailLabel.bottomAnchor, constant: 11)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        passwordLabel
-            .addTo(view)
-            .pinTop(toAnchor: emailTextField.bottomAnchor, constant: 23)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-
-        passwordTextField
-            .addTo(view)
-            .pinTop(toAnchor: passwordLabel.bottomAnchor, constant: 11)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        // "Забыли пароль?" — справа под полем пароля
         forgotPasswordButton
             .addTo(view)
             .pinTop(toAnchor: passwordTextField.bottomAnchor, constant: 10)
             .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -Constants.sideInset)
 
-        // Нижняя ссылка
-        registerButton
-            .addTo(view)
-            .centerXOn(view)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor, constant: -10)
-
-        // Большая кнопка над ссылкой
-        submitButton
-            .addTo(view)
-            .pinBottom(toAnchor: registerButton.topAnchor, constant: -25)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(86)
-    }
-
-    func attachEyeButton(to textField: UITextField, tag: Int) {
-        let button = UIButton(type: .system)
-        button.tag = tag
-        button.tintColor = .black
-        button.setImage(UIImage(named: "eye_closed"), for: .normal)
-        button.backgroundColor = .clear
-        button.imageView?.contentMode = .scaleAspectFit
-        button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
-        button.addTarget(self, action: #selector(onEyeTapped(_:)), for: .touchUpInside)
-
-        let containerWidth: CGFloat = 60
-        let containerHeight: CGFloat = 44
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: containerWidth, height: containerHeight))
-
-        button.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
-        let shiftLeft: CGFloat = 8
-        button.center = CGPoint(x: containerWidth / 2 - shiftLeft, y: containerHeight / 2)
-
-        container.addSubview(button)
-        textField.rightView = container
-        textField.rightViewMode = .always
+        layoutBottomLink(registerButton)
+        layoutPrimaryFooterButton(submitButton, above: registerButton.topAnchor)
     }
 }
 
@@ -217,20 +164,7 @@ private extension LoginViewController {
     }
 
     @objc func onEyeTapped(_ sender: UIButton) {
-        let wasFirstResponder = passwordTextField.isFirstResponder
-        let currentText = passwordTextField.text
-
-        passwordTextField.isSecureTextEntry.toggle()
-        let imageName = passwordTextField.isSecureTextEntry ? "eye_closed" : "eye"
-        sender.setImage(UIImage(named: imageName), for: .normal)
-
-        // фикс для secureTextEntry (чтобы курсор не прыгал/текст не пропадал)
-        passwordTextField.text = nil
-        passwordTextField.text = currentText
-
-        if wasFirstResponder {
-            passwordTextField.becomeFirstResponder()
-        }
+        passwordTextField.toggleSecureEntryKeepingCursor(trigger: sender)
     }
 }
 

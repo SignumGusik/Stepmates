@@ -83,4 +83,47 @@ extension UITextField {
     
 }
 
+extension UITextField {
+    func attachPasswordVisibilityToggle(
+        target: Any?,
+        action: Selector,
+        tag: Int = 0
+    ) {
+        let button = UIButton(type: .system)
+        button.tag = tag
+        button.tintColor = .black
+        button.setImage(UIImage(named: "eye_closed"), for: .normal)
+        button.setTitle(nil, for: .normal)
+        button.backgroundColor = .clear
+        button.imageView?.contentMode = .scaleAspectFit
+        button.contentHorizontalAlignment = .center
+        button.contentVerticalAlignment = .center
+        button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        button.addTarget(target, action: action, for: .touchUpInside)
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 60, height: 44))
+        button.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        button.center = CGPoint(x: 22, y: 22)
+        container.addSubview(button)
+
+        rightView = container
+        rightViewMode = .always
+    }
+
+    func toggleSecureEntryKeepingCursor(trigger button: UIButton? = nil) {
+        let wasFirstResponder = isFirstResponder
+        let currentText = text
+
+        isSecureTextEntry.toggle()
+        let imageName = isSecureTextEntry ? "eye_closed" : "eye"
+        button?.setImage(UIImage(named: imageName), for: .normal)
+
+        text = nil
+        text = currentText
+
+        if wasFirstResponder {
+            becomeFirstResponder()
+        }
+    }
+}
 

@@ -97,17 +97,14 @@ extension SearchFriendsViewController {
 // MARK: - Setup
 private extension SearchFriendsViewController {
     func setupViews() {
-        view.backgroundColor = Constants.beige
+        applyStepmatesBaseScreen(backgroundColor: Constants.beige ?? .systemGroupedBackground)
 
         tableView.separatorStyle = .none
         tableView.backgroundColor = .clear
         tableView.showsVerticalScrollIndicator = false
         tableView.rowHeight = 40
 
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
+        layoutScreenTitle(titleLabel)
 
         searchContainer.addTo(view)
         searchTopConstraint = searchContainer.topAnchor.constraint(
@@ -149,12 +146,12 @@ private extension SearchFriendsViewController {
             .pinLeft(toAnchor: searchIconView.rightAnchor, constant: 8)
             .pinRight(toAnchor: clearButton.leftAnchor, constant: -8)
 
-        tableView
-            .addTo(view)
-            .pinTop(toAnchor: searchContainer.bottomAnchor, constant: 12)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -16)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor, constant: 0)
+        layoutTableView(
+            tableView,
+            below: searchContainer.bottomAnchor,
+            topSpacing: 12,
+            horizontalInset: 16
+        )
     }
     
     func loadInitialData() {

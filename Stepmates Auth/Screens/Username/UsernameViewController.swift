@@ -55,38 +55,15 @@ final class UsernameViewController: UIViewController {
 private extension UsernameViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
-
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailingLessThanOrEqual(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-
-        subtitleLabel
-            .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 10)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-
-        usernameLabel
-            .addTo(view)
-            .pinTop(toAnchor: subtitleLabel.bottomAnchor, constant: 32)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-
-        usernameTextField
-            .addTo(view)
-            .pinTop(toAnchor: usernameLabel.bottomAnchor, constant: 11)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        submitButton
-            .addTo(view)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor, constant: -28)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(86)
+        applyStepmatesBaseScreen()
+        layoutAuthHeader(titleLabel: titleLabel, subtitleLabel: subtitleLabel)
+        layoutFormField(
+            label: usernameLabel,
+            textField: usernameTextField,
+            below: subtitleLabel.bottomAnchor,
+            topSpacing: 32
+        )
+        layoutPrimaryFooterButton(submitButton)
     }
 }
 

@@ -109,7 +109,7 @@ extension FriendsViewController {
 private extension FriendsViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
 
         underlineView.translatesAutoresizingMaskIntoConstraints = false
         underlineView.backgroundColor = Constants.blue ?? .systemBlue
@@ -126,16 +126,8 @@ private extension FriendsViewController {
         refreshControl.addTarget(self, action: #selector(onRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
 
-        addButton
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -16)
-            .setSize(width: 32, height: 32)
-
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
+        layoutHeaderActionButton(addButton)
+        layoutScreenTitle(titleLabel)
 
         underlineView
             .addTo(view)
@@ -155,12 +147,12 @@ private extension FriendsViewController {
             .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
             .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -16)
 
-        tableView
-            .addTo(view)
-            .pinTop(toAnchor: periodView.bottomAnchor, constant: 12)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 0)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
+        layoutTableView(
+            tableView,
+            below: periodView.bottomAnchor,
+            topSpacing: 12,
+            bottom: -12
+        )
     }
 
     private func setupDropdown() {
@@ -172,24 +164,15 @@ private extension FriendsViewController {
 
         dropdownOverlay
             .addTo(view)
-            .pinTop(toAnchor: view.topAnchor, constant: 0)
-            .pinLeft(toAnchor: view.leftAnchor, constant: 0)
-            .pinRight(toAnchor: view.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
+            .pinEdges(to: view)
         view.bringSubviewToFront(dropdownOverlay)
-        dropdownTable.translatesAutoresizingMaskIntoConstraints = false
-        dropdownTable.backgroundColor = .white
-        dropdownTable.layer.cornerRadius = 18
-        dropdownTable.clipsToBounds = true
-        dropdownTable.separatorInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
-        dropdownTable.rowHeight = dropdownRowHeight
-        dropdownTable.isScrollEnabled = false
+        dropdownTable.applyPeriodDropdownStyle(
+            rowHeight: dropdownRowHeight,
+            borderColor: Constants.blue
+        )
         dropdownTable.dataSource = self
         dropdownTable.delegate = self
         dropdownTable.register(UITableViewCell.self, forCellReuseIdentifier: "PeriodCell")
-
-        dropdownTable.layer.borderWidth = 2
-        dropdownTable.layer.borderColor = (Constants.blue ?? .systemBlue).cgColor
 
         dropdownTable
             .addTo(dropdownOverlay)

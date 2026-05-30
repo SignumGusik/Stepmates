@@ -58,11 +58,17 @@ extension RegisterViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.backButtonTitle = ""
         setupViews()
-        attachEyeButton(to: passwordTextField, tag: 1)
-        attachEyeButton(to: confirmPasswordTextField, tag: 2)
-        
+        passwordTextField.attachPasswordVisibilityToggle(
+            target: self,
+            action: #selector(onEyeTapped(_:)),
+            tag: 1
+        )
+        confirmPasswordTextField.attachPasswordVisibilityToggle(
+            target: self,
+            action: #selector(onEyeTapped(_:)),
+            tag: 2
+        )
     }
     
     
@@ -73,89 +79,32 @@ extension RegisterViewController {
 extension RegisterViewController {
     
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
+        layoutAuthHeader(titleLabel: registerTitle, subtitleLabel: subtitleLabel)
 
-        // Title
-        registerTitle
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailingLessThanOrEqual(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
+        let emailBottomAnchor = layoutFormField(
+            label: emailLabel,
+            textField: emailTextField,
+            below: subtitleLabel.bottomAnchor,
+            topSpacing: 82
+        )
 
-        subtitleLabel
-            .addTo(view)
-            .setSize(width: Constants.subtitleWidth, height: Constants.subtitleHeight)
-            .pinTop(toAnchor: registerTitle.bottomAnchor, constant: 10)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: Constants.subtitleLeft)
+        let passwordBottomAnchor = layoutFormField(
+            label: nil,
+            textField: passwordTextField,
+            below: emailBottomAnchor,
+            topSpacing: 23
+        )
 
-        emailLabel
-            .addTo(view)
-            .setSize(width: Constants.emailLabelWidth, height: Constants.emailLabelHeight)
-            .pinTop(toAnchor: subtitleLabel.bottomAnchor, constant: 82)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: Constants.emailLabelLeft)
+        layoutFormField(
+            label: nil,
+            textField: confirmPasswordTextField,
+            below: passwordBottomAnchor,
+            topSpacing: 10
+        )
 
-        // Email field
-        emailTextField
-            .addTo(view)
-            .pinTop(toAnchor: emailLabel.bottomAnchor, constant: 11)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        // Password field
-        passwordTextField
-            .addTo(view)
-            .pinTop(toAnchor: emailTextField.bottomAnchor, constant: 23)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        // Confirm password field
-        confirmPasswordTextField
-            .addTo(view)
-            .pinTop(toAnchor: passwordTextField.bottomAnchor, constant: 10)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        // Bottom login
-        loginButton
-            .addTo(view)
-            .centerXOn(view)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor, constant: -10)
-        
-    
-        registerButton
-            .addTo(view)
-            .pinBottom(toAnchor: loginButton.topAnchor, constant: -25)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(86)
-    }
-    
-    private func attachEyeButton(to textField: UITextField, tag: Int) {
-        let button = UIButton(type: .system)
-        button.tag = tag
-        button.tintColor = .black
-        button.setImage(UIImage(named: "eye_closed"), for: .normal)
-        button.setTitle(nil, for: .normal)
-        button.backgroundColor = .clear
-        button.imageView?.contentMode = .scaleAspectFit
-        button.contentHorizontalAlignment = .center
-        button.contentVerticalAlignment = .center
-        button.contentEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
-        button.addTarget(self, action: #selector(onEyeTapped(_:)), for: .touchUpInside)
-        let containerWidth: CGFloat = 60
-        let containerHeight: CGFloat = 44
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: containerWidth, height: containerHeight))
-        button.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
-        let shiftLeft: CGFloat = 8
-        button.center = CGPoint(x: containerWidth / 2 - shiftLeft, y: containerHeight / 2)
-
-        container.addSubview(button)
-
-        textField.rightView = container
-        textField.rightViewMode = .always
+        layoutBottomLink(loginButton)
+        layoutPrimaryFooterButton(registerButton, above: loginButton.topAnchor)
     }
     
 }
@@ -196,17 +145,7 @@ extension RegisterViewController {
             field = confirmPasswordTextField
         }
 
-        let wasFirstResponder = field.isFirstResponder
-        let currentText = field.text
-        field.isSecureTextEntry.toggle()
-        let imageName = field.isSecureTextEntry ? "eye_closed" : "eye"
-        sender.setImage(UIImage(named: imageName), for: .normal)
-        field.text = nil
-        field.text = currentText
-
-        if wasFirstResponder {
-            field.becomeFirstResponder()
-        }
+        field.toggleSecureEntryKeepingCursor(trigger: sender)
     }
 }
 

@@ -34,4 +34,20 @@ extension UITableView {
         table.tableFooterView = UIView()
         return table
     }
+
+    @discardableResult
+    func applyPeriodDropdownStyle(
+        rowHeight: CGFloat,
+        borderColor: UIColor?
+    ) -> Self {
+        backgroundColor = .white
+        layer.cornerRadius = 18
+        clipsToBounds = true
+        separatorInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        self.rowHeight = rowHeight
+        isScrollEnabled = false
+        layer.borderWidth = 2
+        layer.borderColor = (borderColor ?? .systemBlue).cgColor
+        return self
+    }
 }

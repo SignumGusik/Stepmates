@@ -154,31 +154,22 @@ private extension SelectedUserViewController {
         blurView.translatesAutoresizingMaskIntoConstraints = false
         blurView
             .addTo(view)
-            .pinTop(toAnchor: view.topAnchor, constant: 0)
-            .pinLeft(toAnchor: view.leftAnchor, constant: 0)
-            .pinRight(toAnchor: view.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
+            .pinEdges(to: view)
 
         dimView.translatesAutoresizingMaskIntoConstraints = false
         dimView.backgroundColor = UIColor.black.withAlphaComponent(0.10)
 
         dimView
             .addTo(view)
-            .pinTop(toAnchor: view.topAnchor, constant: 0)
-            .pinLeft(toAnchor: view.leftAnchor, constant: 0)
-            .pinRight(toAnchor: view.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
+            .pinEdges(to: view)
 
         let bgTap = UITapGestureRecognizer(target: self, action: #selector(onBackgroundTapped(_:)))
         bgTap.cancelsTouchesInView = false
         view.addGestureRecognizer(bgTap)
 
-        cardView.translatesAutoresizingMaskIntoConstraints = false
-        cardView.backgroundColor = .white
-        cardView.layer.cornerRadius = 22
+        cardView.applyRoundedBackground(color: .white, cornerRadius: 22)
         cardView.layer.borderWidth = 2
         cardView.layer.borderColor = (Constants.blue ?? .systemBlue).cgColor
-        cardView.clipsToBounds = true
 
         cardView
             .addTo(view)
@@ -216,10 +207,7 @@ private extension SelectedUserViewController {
 
         avatarImageView
             .addTo(avatarContainer)
-            .pinTop(toAnchor: avatarContainer.topAnchor, constant: 0)
-            .pinLeft(toAnchor: avatarContainer.leftAnchor, constant: 0)
-            .pinRight(toAnchor: avatarContainer.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: avatarContainer.bottomAnchor, constant: 0)
+            .pinEdges(to: avatarContainer)
 
         usernameLabel
             .addTo(cardView)

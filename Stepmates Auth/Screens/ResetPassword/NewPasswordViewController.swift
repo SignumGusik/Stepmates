@@ -48,8 +48,16 @@ final class NewPasswordViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
-        attachEyeButton(to: passwordTextField, tag: 1)
-        attachEyeButton(to: confirmPasswordTextField, tag: 2)
+        passwordTextField.attachPasswordVisibilityToggle(
+            target: self,
+            action: #selector(onEyeTapped(_:)),
+            tag: 1
+        )
+        confirmPasswordTextField.attachPasswordVisibilityToggle(
+            target: self,
+            action: #selector(onEyeTapped(_:)),
+            tag: 2
+        )
     }
 }
 
@@ -57,62 +65,24 @@ final class NewPasswordViewController: UIViewController {
 private extension NewPasswordViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
+        layoutAuthHeader(titleLabel: titleLabel, subtitleLabel: subtitleLabel)
 
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailingLessThanOrEqual(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
+        let passwordBottomAnchor = layoutFormField(
+            label: nil,
+            textField: passwordTextField,
+            below: subtitleLabel.bottomAnchor,
+            topSpacing: 32
+        )
 
-        subtitleLabel
-            .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 10)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
+        layoutFormField(
+            label: nil,
+            textField: confirmPasswordTextField,
+            below: passwordBottomAnchor,
+            topSpacing: 10
+        )
 
-        passwordTextField
-            .addTo(view)
-            .pinTop(toAnchor: subtitleLabel.bottomAnchor, constant: 32)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        confirmPasswordTextField
-            .addTo(view)
-            .pinTop(toAnchor: passwordTextField.bottomAnchor, constant: 10)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(50)
-
-        submitButton
-            .addTo(view)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor, constant: -28)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-            .setHeight(86)
-    }
-
-    func attachEyeButton(to textField: UITextField, tag: Int) {
-        let button = UIButton(type: .system)
-        button.tag = tag
-        button.tintColor = .black
-        button.setImage(UIImage(named: "eye_closed"), for: .normal)
-        button.backgroundColor = .clear
-        button.imageView?.contentMode = .scaleAspectFit
-        button.addTarget(self, action: #selector(onEyeTapped(_:)), for: .touchUpInside)
-        let containerWidth: CGFloat = 60
-        let containerHeight: CGFloat = 44
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: containerWidth, height: containerHeight))
-
-        button.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
-        let shiftLeft: CGFloat = 8
-        button.center = CGPoint(x: containerWidth / 2 - shiftLeft, y: containerHeight / 2)
-
-        container.addSubview(button)
-
-        textField.rightView = container
-        textField.rightViewMode = .always
+        layoutPrimaryFooterButton(submitButton)
     }
 }
 
@@ -150,22 +120,7 @@ private extension NewPasswordViewController {
 
     @objc func onEyeTapped(_ sender: UIButton) {
         let field: UITextField = (sender.tag == 1) ? passwordTextField : confirmPasswordTextField
-
-        let wasFirstResponder = field.isFirstResponder
-        let currentText = field.text
-
-        field.isSecureTextEntry.toggle()
-
-        let imageName = field.isSecureTextEntry ? "eye_closed" : "eye"
-        sender.setImage(UIImage(named: imageName), for: .normal)
-
-        // фикс “прыжка” курсора при toggle secure
-        field.text = nil
-        field.text = currentText
-
-        if wasFirstResponder {
-            field.becomeFirstResponder()
-        }
+        field.toggleSecureEntryKeepingCursor(trigger: sender)
     }
 
     func serverMessage(from error: Error) -> String {

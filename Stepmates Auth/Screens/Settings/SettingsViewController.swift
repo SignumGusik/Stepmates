@@ -198,18 +198,11 @@ extension SettingsViewController {
 private extension SettingsViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
 
-        backgroundPanel.translatesAutoresizingMaskIntoConstraints = false
-        backgroundPanel.backgroundColor = Constants.lightPurple
-        backgroundPanel.layer.cornerRadius = 20
-        backgroundPanel.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        backgroundPanel.clipsToBounds = true
+        backgroundPanel.applyTopRoundedPanelStyle(color: Constants.lightPurple)
+        let titleBottomAnchor = layoutScreenTitle(titleLabel)
 
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
 
         editButton
             .addTo(view)
@@ -230,7 +223,7 @@ private extension SettingsViewController {
 
         backgroundPanel
             .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 14)
+            .pinTop(toAnchor: titleBottomAnchor, constant: 14)
             .pinLeft(toAnchor: view.leftAnchor)
             .pinRight(toAnchor: view.rightAnchor)
             .pinBottom(toAnchor: view.bottomAnchor)
@@ -243,7 +236,7 @@ private extension SettingsViewController {
 
         scrollView
             .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 14)
+            .pinTop(toAnchor: titleBottomAnchor, constant: 14)
             .pinLeft(toAnchor: view.leftAnchor)
             .pinRight(toAnchor: view.rightAnchor)
             .pinBottom(toAnchor: view.bottomAnchor)
@@ -282,10 +275,7 @@ private extension SettingsViewController {
     }
     
     func setupProfileCard() {
-        profileCard.translatesAutoresizingMaskIntoConstraints = false
-        profileCard.backgroundColor = .white
-        profileCard.layer.cornerRadius = 20
-        profileCard.clipsToBounds = true
+        profileCard.applyRoundedBackground(color: .white, cornerRadius: 20)
 
         profileCard
             .addTo(contentView)
@@ -329,10 +319,10 @@ private extension SettingsViewController {
     }
     
     func setupStreakCard() {
-        streakCard.translatesAutoresizingMaskIntoConstraints = false
-        streakCard.backgroundColor = Constants.blue ?? UIColor(hex: "#2837B8")
-        streakCard.layer.cornerRadius = 20
-        streakCard.clipsToBounds = true
+        streakCard.applyRoundedBackground(
+            color: Constants.blue ?? UIColor(hex: "#2837B8"),
+            cornerRadius: 20
+        )
 
         streakCard
             .addTo(contentView)
@@ -364,10 +354,7 @@ private extension SettingsViewController {
             .pinTop(toAnchor: streakCard.bottomAnchor, constant: 56)
             .pinLeft(toAnchor: contentView.safeAreaLayoutGuide.leftAnchor, constant: 20)
 
-        achievementsContainer.translatesAutoresizingMaskIntoConstraints = false
-        achievementsContainer.backgroundColor = .white
-        achievementsContainer.layer.cornerRadius = 20
-        achievementsContainer.clipsToBounds = true
+        achievementsContainer.applyRoundedBackground(color: .white, cornerRadius: 20)
 
         achievementsContainer
             .addTo(contentView)

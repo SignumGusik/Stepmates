@@ -70,31 +70,17 @@ extension NotificationsViewController {
 private extension NotificationsViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
 
         refreshControl.addTarget(self, action: #selector(onRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
 
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
-
-        tableView
-            .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 25)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor)
-
-        emptyLabel.textAlignment = .center
-
-        emptyLabel
-            .addTo(view)
-            .centerXOn(view)
-            .centerYOn(view)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 20)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -20)
+        layoutTableView(
+            tableView,
+            below: layoutScreenTitle(titleLabel),
+            topSpacing: 25
+        )
+        layoutCenteredEmptyLabel(emptyLabel)
     }
 
     func applyCachedNotificationsIfAvailable() {

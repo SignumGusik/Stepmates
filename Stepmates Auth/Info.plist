@@ -8,6 +8,9 @@
         <true/>
     </dict>
 
+    <key>YANDEX_MAPKIT_API_KEY</key>
+    <string>$(YANDEX_MAPKIT_API_KEY)</string>
+
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Stepmates использует геолокацию, чтобы показывать вас на карте, строить маршрут прогулки и отображать друзей рядом.</string>
 

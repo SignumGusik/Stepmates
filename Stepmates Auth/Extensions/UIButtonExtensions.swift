@@ -237,7 +237,45 @@ extension UIButton {
         return button
     }
 }
-import UIKit
+
+extension UIButton {
+    @discardableResult
+    func applyFloatingButtonStyle(
+        cornerRadius: CGFloat,
+        tintColor: UIColor?,
+        backgroundColor: UIColor = UIColor.white.withAlphaComponent(0.96),
+        shadowOpacity: Float = 0.12,
+        shadowRadius: CGFloat = 10,
+        shadowYOffset: CGFloat = 5
+    ) -> Self {
+        self.tintColor = tintColor
+        applyFloatingCardStyle(
+            backgroundColor: backgroundColor,
+            cornerRadius: cornerRadius,
+            shadowOpacity: shadowOpacity,
+            shadowRadius: shadowRadius,
+            shadowYOffset: shadowYOffset
+        )
+        return self
+    }
+
+    @discardableResult
+    func applyTitleStyle(
+        fontName: String,
+        size: CGFloat,
+        fallbackWeight: UIFont.Weight,
+        color: UIColor,
+        title: String? = nil
+    ) -> Self {
+        if let title {
+            setTitle(title, for: .normal)
+        }
+        setTitleColor(color, for: .normal)
+        titleLabel?.font = UIFont(name: fontName, size: size)
+            ?? .systemFont(ofSize: size, weight: fallbackWeight)
+        return self
+    }
+}
 
 extension UIButton {
 

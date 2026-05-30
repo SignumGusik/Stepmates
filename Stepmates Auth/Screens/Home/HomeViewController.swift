@@ -98,55 +98,7 @@ class HomeViewController: UIViewController {
         CGFloat(dailyGoal)
     }
 
-    private let goalOverlayView = UIView()
-    private let goalBlurView = UIVisualEffectView(effect: nil)
-    private let goalBlurEffect = UIBlurEffect(style: .systemUltraThinMaterialLight)
-    private let goalDimView = UIView()
-    private let goalEditorCardView = UIView()
-    private lazy var goalEditorCloseButton = UIButton.makeImageButton(
-        imageName: "cancelBtn",
-        target: self,
-        action: #selector(onGoalEditorCloseTapped)
-    )
-    private lazy var goalEditorTitleLabel = UILabel.makeManrope(
-        text: "Введите цель",
-        style: Constants.manropeExtraBold,
-        size: 20,
-        color: Constants.blue ?? .systemBlue
-    )
-    private lazy var goalEditorTextField: UITextField = {
-        let field = UITextField()
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.backgroundColor = Constants.lightPurple
-        field.layer.cornerRadius = 18
-        field.clipsToBounds = true
-        field.keyboardType = .numberPad
-        field.textAlignment = .center
-        field.textColor = Constants.blue ?? .systemBlue
-        field.font = UIFont(name: Constants.manropeExtraBold, size: 28)
-            ?? .systemFont(ofSize: 28, weight: .heavy)
-        field.addTarget(self, action: #selector(onGoalTextChanged), for: .editingChanged)
-        return field
-    }()
-    private lazy var goalEditorHintLabel = UILabel.makeManrope(
-        text: "От 1 000 до 100 000 шагов",
-        style: Constants.manropeMedium,
-        size: 12,
-        color: UIColor.black.withAlphaComponent(0.45)
-    )
-    private lazy var goalEditorSaveButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.setTitle("Сохранить", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.titleLabel?.font = UIFont(name: Constants.manropeExtraBold, size: 16)
-            ?? .systemFont(ofSize: 16, weight: .heavy)
-        button.backgroundColor = Constants.orange ?? .orange
-        button.layer.cornerRadius = 22
-        button.clipsToBounds = true
-        button.addTarget(self, action: #selector(onGoalSaveTapped), for: .touchUpInside)
-        return button
-    }()
+    private let goalEditorView = HomeGoalEditorView()
 
     private lazy var notificationsButton = UIButton.makeRoundIconButton(
         imageName: "notifications",
@@ -248,7 +200,7 @@ extension HomeViewController {
 private extension HomeViewController {
 
     func setupViews() {
-        title = "Home"
+        title = "Дом"
 
         starsView.translatesAutoresizingMaskIntoConstraints = false
         starsView.addTo(view)
@@ -288,9 +240,10 @@ private extension HomeViewController {
             .setHeight(310)
 
         statsCard.translatesAutoresizingMaskIntoConstraints = false
-        statsCard.backgroundColor = Constants.lightPurple
-        statsCard.layer.cornerRadius = 20
-        statsCard.clipsToBounds = true
+        statsCard.applyRoundedBackground(
+            color: Constants.lightPurple,
+            cornerRadius: 20
+        )
 
         statsCard
             .addTo(view)
@@ -377,111 +330,19 @@ private extension HomeViewController {
     }
 
     func setupGoalEditor() {
-        goalOverlayView.translatesAutoresizingMaskIntoConstraints = false
-        goalOverlayView.isHidden = true
-        goalOverlayView.alpha = 0
-
-        goalOverlayView
-            .addTo(view)
-            .pinTop(toAnchor: view.topAnchor, constant: 0)
-            .pinLeft(toAnchor: view.leftAnchor, constant: 0)
-            .pinRight(toAnchor: view.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
-
-        goalBlurView.translatesAutoresizingMaskIntoConstraints = false
-        goalBlurView
-            .addTo(goalOverlayView)
-            .pinTop(toAnchor: goalOverlayView.topAnchor, constant: 0)
-            .pinLeft(toAnchor: goalOverlayView.leftAnchor, constant: 0)
-            .pinRight(toAnchor: goalOverlayView.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: goalOverlayView.bottomAnchor, constant: 0)
-
-        goalDimView.translatesAutoresizingMaskIntoConstraints = false
-        goalDimView.backgroundColor = UIColor.black.withAlphaComponent(0.10)
-        goalDimView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(onGoalEditorCloseTapped)))
-
-        goalDimView
-            .addTo(goalOverlayView)
-            .pinTop(toAnchor: goalOverlayView.topAnchor, constant: 0)
-            .pinLeft(toAnchor: goalOverlayView.leftAnchor, constant: 0)
-            .pinRight(toAnchor: goalOverlayView.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: goalOverlayView.bottomAnchor, constant: 0)
-
-        goalEditorCardView.translatesAutoresizingMaskIntoConstraints = false
-        goalEditorCardView.backgroundColor = .white
-        goalEditorCardView.layer.cornerRadius = 22
-        goalEditorCardView.layer.borderWidth = 2
-        goalEditorCardView.layer.borderColor = (Constants.blue ?? .systemBlue).cgColor
-        goalEditorCardView.layer.shadowColor = UIColor.black.cgColor
-        goalEditorCardView.layer.shadowOpacity = 0.14
-        goalEditorCardView.layer.shadowRadius = 18
-        goalEditorCardView.layer.shadowOffset = CGSize(width: 0, height: 10)
-
-        goalEditorCardView
-            .addTo(goalOverlayView)
-            .centerXOn(goalOverlayView)
-            .centerYOn(goalOverlayView)
-            .setWidth(320)
-            .setHeight(270)
-
-        goalEditorCloseButton
-            .addTo(goalEditorCardView)
-            .pinTop(toAnchor: goalEditorCardView.topAnchor, constant: 14)
-            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -14)
-            .setSize(width: 24, height: 24)
-
-        goalEditorTitleLabel
-            .addTo(goalEditorCardView)
-            .pinTop(toAnchor: goalEditorCardView.topAnchor, constant: 20)
-            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
-            .pinRight(toAnchor: goalEditorCloseButton.leftAnchor, constant: -10)
-
-        goalEditorTextField
-            .addTo(goalEditorCardView)
-            .pinTop(toAnchor: goalEditorTitleLabel.bottomAnchor, constant: 18)
-            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
-            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -22)
-            .setHeight(58)
-
-        goalEditorHintLabel
-            .addTo(goalEditorCardView)
-            .pinTop(toAnchor: goalEditorTextField.bottomAnchor, constant: 8)
-            .centerXOn(goalEditorCardView)
-
-        let quickStack = UIStackView()
-        quickStack.translatesAutoresizingMaskIntoConstraints = false
-        quickStack.axis = .horizontal
-        quickStack.spacing = 8
-        quickStack.distribution = .fillEqually
-
-        for value in [8000, 10000, 12000] {
-            let button = UIButton(type: .system)
-            button.translatesAutoresizingMaskIntoConstraints = false
-            button.tag = value
-            button.setTitle(formatSteps(value), for: .normal)
-            button.setTitleColor(Constants.blue ?? .systemBlue, for: .normal)
-            button.titleLabel?.font = UIFont(name: Constants.manropeExtraBold, size: 13)
-                ?? .systemFont(ofSize: 13, weight: .heavy)
-            button.backgroundColor = Constants.lightPurple
-            button.layer.cornerRadius = 12
-            button.clipsToBounds = true
-            button.addTarget(self, action: #selector(onQuickGoalTapped(_:)), for: .touchUpInside)
-            quickStack.addArrangedSubview(button)
+        goalEditorView.attach(to: view)
+        goalEditorView.onClose = { [weak self] in
+            self?.hideGoalEditor()
         }
-
-        quickStack
-            .addTo(goalEditorCardView)
-            .pinTop(toAnchor: goalEditorHintLabel.bottomAnchor, constant: 16)
-            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
-            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -22)
-            .setHeight(36)
-
-        goalEditorSaveButton
-            .addTo(goalEditorCardView)
-            .pinTop(toAnchor: quickStack.bottomAnchor, constant: 18)
-            .pinLeft(toAnchor: goalEditorCardView.leftAnchor, constant: 22)
-            .pinRight(toAnchor: goalEditorCardView.rightAnchor, constant: -22)
-            .setHeight(46)
+        goalEditorView.onTextChanged = { [weak self] in
+            self?.validateGoalInput()
+        }
+        goalEditorView.onQuickGoal = { [weak self] _ in
+            self?.validateGoalInput()
+        }
+        goalEditorView.onSave = { [weak self] in
+            self?.saveGoalFromEditor()
+        }
     }
 
     private func setupNavBar() {
@@ -933,76 +794,19 @@ private extension HomeViewController {
     }
 
     func showGoalEditor() {
-        goalEditorTextField.text = "\(dailyGoal)"
-        goalEditorHintLabel.text = "От 1 000 до 100 000 шагов"
-        goalEditorHintLabel.textColor = UIColor.black.withAlphaComponent(0.45)
-        goalEditorSaveButton.isEnabled = true
-        goalEditorSaveButton.alpha = 1
-        goalEditorSaveButton.setTitle("Сохранить", for: .normal)
-
-        goalOverlayView.isHidden = false
-        view.bringSubviewToFront(goalOverlayView)
-        goalOverlayView.alpha = 0
-        goalBlurView.effect = nil
-        goalEditorCardView.alpha = 0
-        goalEditorCardView.transform = CGAffineTransform(translationX: 0, y: 22)
-            .scaledBy(x: 0.96, y: 0.96)
-
-        UIView.animate(withDuration: 0.24, delay: 0, options: [.curveEaseOut]) {
-            self.goalOverlayView.alpha = 1
-            self.goalBlurView.effect = self.goalBlurEffect
-        }
-
-        UIView.animate(
-            withDuration: 0.42,
-            delay: 0,
-            usingSpringWithDamping: 0.78,
-            initialSpringVelocity: 0.65,
-            options: [.curveEaseOut]
-        ) {
-            self.goalEditorCardView.alpha = 1
-            self.goalEditorCardView.transform = .identity
-        } completion: { _ in
-            self.goalEditorTextField.becomeFirstResponder()
-        }
+        goalEditorView.show(currentGoal: dailyGoal)
     }
 
     func hideGoalEditor() {
-        view.endEditing(true)
-
-        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseIn]) {
-            self.goalOverlayView.alpha = 0
-            self.goalBlurView.effect = nil
-            self.goalEditorCardView.alpha = 0
-            self.goalEditorCardView.transform = CGAffineTransform(scaleX: 0.98, y: 0.98)
-        } completion: { _ in
-            self.goalOverlayView.isHidden = true
-            self.goalEditorCardView.transform = .identity
-        }
+        goalEditorView.hide()
     }
 
     func parsedGoalInput() -> Int? {
-        let digits = (goalEditorTextField.text ?? "").filter { $0.isNumber }
-        guard let value = Int(digits),
-              (1000...100000).contains(value) else {
-            return nil
-        }
-
-        return value
+        goalEditorView.parsedGoal()
     }
 
     func validateGoalInput() {
-        let isValid = parsedGoalInput() != nil
-        goalEditorSaveButton.isEnabled = isValid
-        goalEditorSaveButton.alpha = isValid ? 1 : 0.55
-
-        if isValid {
-            goalEditorHintLabel.text = "От 1 000 до 100 000 шагов"
-            goalEditorHintLabel.textColor = UIColor.black.withAlphaComponent(0.45)
-        } else {
-            goalEditorHintLabel.text = "Введите число от 1 000 до 100 000"
-            goalEditorHintLabel.textColor = Constants.orange ?? .orange
-        }
+        goalEditorView.validateInput()
     }
 
     func applyCachedHomeCountersIfAvailable() {
@@ -1250,25 +1054,13 @@ private extension HomeViewController {
     @objc func onGoalEditTapped() {
         showGoalEditor()
     }
-    @objc func onGoalEditorCloseTapped() {
-        hideGoalEditor()
-    }
-    @objc func onGoalTextChanged() {
-        validateGoalInput()
-    }
-    @objc func onQuickGoalTapped(_ sender: UIButton) {
-        goalEditorTextField.text = "\(sender.tag)"
-        validateGoalInput()
-    }
-    @objc func onGoalSaveTapped() {
+    func saveGoalFromEditor() {
         guard let goal = parsedGoalInput() else {
             validateGoalInput()
             return
         }
 
-        goalEditorSaveButton.isEnabled = false
-        goalEditorSaveButton.alpha = 0.7
-        goalEditorSaveButton.setTitle("Сохраняем...", for: .normal)
+        goalEditorView.setSaving(true)
 
         let requestedDate = Date()
         Task { [weak self] in
@@ -1295,11 +1087,7 @@ private extension HomeViewController {
                 }
             } catch {
                 await MainActor.run {
-                    self.goalEditorSaveButton.isEnabled = true
-                    self.goalEditorSaveButton.alpha = 1
-                    self.goalEditorSaveButton.setTitle("Сохранить", for: .normal)
-                    self.goalEditorHintLabel.text = "Не удалось сохранить цель"
-                    self.goalEditorHintLabel.textColor = Constants.orange ?? .orange
+                    self.goalEditorView.showSaveError()
                 }
             }
         }

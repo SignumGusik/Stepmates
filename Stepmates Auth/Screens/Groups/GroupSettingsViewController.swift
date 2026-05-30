@@ -160,18 +160,11 @@ extension GroupSettingsViewController {
 private extension GroupSettingsViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
 
-        backgroundPanel.translatesAutoresizingMaskIntoConstraints = false
-        backgroundPanel.backgroundColor = Constants.lightPurple
-        backgroundPanel.layer.cornerRadius = 20
-        backgroundPanel.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        backgroundPanel.clipsToBounds = true
+        backgroundPanel.applyTopRoundedPanelStyle(color: Constants.lightPurple)
+        let titleBottomAnchor = layoutScreenTitle(titleLabel)
 
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
 
         closeEditButton
             .addTo(view)
@@ -187,19 +180,16 @@ private extension GroupSettingsViewController {
 
         backgroundPanel
             .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 22)
+            .pinTop(toAnchor: titleBottomAnchor, constant: 22)
             .pinLeft(toAnchor: view.leftAnchor)
             .pinRight(toAnchor: view.rightAnchor)
             .pinBottom(toAnchor: view.bottomAnchor)
 
-        profileCard.translatesAutoresizingMaskIntoConstraints = false
-        profileCard.backgroundColor = .white
-        profileCard.layer.cornerRadius = 20
-        profileCard.clipsToBounds = true
+        profileCard.applyRoundedBackground(color: .white, cornerRadius: 20)
 
         profileCard
             .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 30)
+            .pinTop(toAnchor: titleBottomAnchor, constant: 30)
             .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 10)
             .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -10)
             .setHeight(116)

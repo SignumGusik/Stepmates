@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import timedelta
+from django.core.exceptions import ImproperlyConfigured
 
 try:
     import dj_database_url
@@ -17,12 +18,14 @@ IS_TESTING = "test" in sys.argv
 SILENCED_SYSTEM_CHECKS = ["fields.E210"] if IS_TESTING else []
 
 
-SECRET_KEY = os.getenv(
-    "SECRET_KEY",
-    "django-insecure-local-dev-key-only"
-)
-
 DEBUG = os.getenv("DEBUG", "False") == "True"
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG or IS_TESTING:
+        SECRET_KEY = "django-insecure-local-dev-key-only"
+    else:
+        raise ImproperlyConfigured("SECRET_KEY must be set in production.")
 
 SERVER_BASE_URL = os.getenv(
     "SERVER_BASE_URL",

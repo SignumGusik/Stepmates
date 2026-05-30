@@ -68,22 +68,13 @@ final class MapViewController: UIViewController {
     private let signalLostAfter: TimeInterval = 28
     private let maximumAccuracyCircleRadius: CLLocationAccuracy = 220
 
-    private let signalBadgeContainer = UIView()
-    private let signalBadgeLabel = UILabel()
-    private let signalBadgeDetailLabel = UILabel()
+    private let signalBadgeView = MapSignalBadgeView()
     private let centerOnMeButton = UIButton(type: .system)
     private let sharingToggleButton = UIButton(type: .system)
     private var isSharingLocation = true
     private let mapDimControl = UIControl()
-    private let emptyRoutesView = UIView()
-    private let emptyRoutesTitleLabel = UILabel()
-    private let emptyRoutesSubtitleLabel = UILabel()
-    private let friendCardView = UIView()
-    private let friendCardAvatarImageView = UIImageView()
-    private let friendCardNameLabel = UILabel()
-    private let friendCardStatusLabel = UILabel()
-    private let friendCardDetailLabel = UILabel()
-    private let friendCardFollowBadge = UILabel()
+    private let emptyRoutesView = MapEmptyRoutesView()
+    private let friendCardView = MapFriendCardView()
     private var selectedFriend: FriendLiveLocation?
 
     private var placemarkAnimations: [Int: CADisplayLink] = [:]
@@ -160,7 +151,7 @@ final class MapViewController: UIViewController {
 private extension MapViewController {
 
     func setupView() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
         title = "Карта"
     }
 
@@ -174,14 +165,11 @@ private extension MapViewController {
 
         let image = UIImage(systemName: "location.fill")
         centerOnMeButton.setImage(image, for: .normal)
-        centerOnMeButton.tintColor = Constants.purple ?? .systemBlue
-        centerOnMeButton.backgroundColor = UIColor.white.withAlphaComponent(0.96)
-
-        centerOnMeButton.layer.cornerRadius = 24
-        centerOnMeButton.layer.shadowColor = UIColor.black.cgColor
-        centerOnMeButton.layer.shadowOpacity = 0.14
-        centerOnMeButton.layer.shadowRadius = 10
-        centerOnMeButton.layer.shadowOffset = CGSize(width: 0, height: 5)
+        centerOnMeButton.applyFloatingButtonStyle(
+            cornerRadius: 24,
+            tintColor: Constants.purple ?? .systemBlue,
+            shadowOpacity: 0.14
+        )
 
         centerOnMeButton.addTarget(
             self,
@@ -189,7 +177,7 @@ private extension MapViewController {
             for: .touchUpInside
         )
 
-        view.addSubview(centerOnMeButton)
+        centerOnMeButton.addTo(view)
 
         NSLayoutConstraint.activate([
             centerOnMeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
@@ -202,15 +190,17 @@ private extension MapViewController {
     }
     func setupSharingToggleButton() {
         sharingToggleButton.translatesAutoresizingMaskIntoConstraints = false
-        sharingToggleButton.backgroundColor = UIColor.white.withAlphaComponent(0.96)
-        sharingToggleButton.layer.cornerRadius = 22
-        sharingToggleButton.layer.shadowColor = UIColor.black.cgColor
-        sharingToggleButton.layer.shadowOpacity = 0.12
-        sharingToggleButton.layer.shadowRadius = 10
-        sharingToggleButton.layer.shadowOffset = CGSize(width: 0, height: 5)
-
-        sharingToggleButton.titleLabel?.font = UIFont(name: Constants.manropeBold, size: 13)
-            ?? UIFont.systemFont(ofSize: 13, weight: .bold)
+        sharingToggleButton.applyFloatingButtonStyle(
+            cornerRadius: 22,
+            tintColor: Constants.purple ?? .systemBlue,
+            shadowOpacity: 0.12
+        )
+        sharingToggleButton.applyTitleStyle(
+            fontName: Constants.manropeBold,
+            size: 13,
+            fallbackWeight: .bold,
+            color: Constants.purple ?? .systemBlue
+        )
 
         sharingToggleButton.addTarget(
             self,
@@ -218,7 +208,7 @@ private extension MapViewController {
             for: .touchUpInside
         )
 
-        view.addSubview(sharingToggleButton)
+        sharingToggleButton.addTo(view)
 
         NSLayoutConstraint.activate([
             sharingToggleButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
@@ -247,49 +237,13 @@ private extension MapViewController {
         )
     }
     func setupEmptyRoutesView() {
-        emptyRoutesView.translatesAutoresizingMaskIntoConstraints = false
-        emptyRoutesView.backgroundColor = UIColor.white.withAlphaComponent(0.94)
-        emptyRoutesView.layer.cornerRadius = 22
-        emptyRoutesView.layer.shadowColor = UIColor.black.cgColor
-        emptyRoutesView.layer.shadowOpacity = 0.10
-        emptyRoutesView.layer.shadowRadius = 14
-        emptyRoutesView.layer.shadowOffset = CGSize(width: 0, height: 7)
-        emptyRoutesView.alpha = 0
-        emptyRoutesView.isHidden = true
-
-        emptyRoutesTitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        emptyRoutesTitleLabel.font = UIFont(name: Constants.manropeBold, size: 17)
-            ?? UIFont.systemFont(ofSize: 17, weight: .bold)
-        emptyRoutesTitleLabel.textColor = .black
-        emptyRoutesTitleLabel.textAlignment = .center
-        emptyRoutesTitleLabel.text = "Пока нет маршрутов"
-
-        emptyRoutesSubtitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        emptyRoutesSubtitleLabel.font = UIFont(name: Constants.manropeMedium, size: 14)
-            ?? UIFont.systemFont(ofSize: 14, weight: .medium)
-        emptyRoutesSubtitleLabel.textColor = UIColor.black.withAlphaComponent(0.55)
-        emptyRoutesSubtitleLabel.textAlignment = .center
-        emptyRoutesSubtitleLabel.numberOfLines = 2
-        emptyRoutesSubtitleLabel.text = "Когда участники группы начнут гулять, их маршруты появятся здесь"
-
-        view.addSubview(emptyRoutesView)
-        emptyRoutesView.addSubview(emptyRoutesTitleLabel)
-        emptyRoutesView.addSubview(emptyRoutesSubtitleLabel)
+        emptyRoutesView.addTo(view)
 
         NSLayoutConstraint.activate([
             emptyRoutesView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             emptyRoutesView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
             emptyRoutesView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 34),
-            emptyRoutesView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -34),
-
-            emptyRoutesTitleLabel.topAnchor.constraint(equalTo: emptyRoutesView.topAnchor, constant: 18),
-            emptyRoutesTitleLabel.leadingAnchor.constraint(equalTo: emptyRoutesView.leadingAnchor, constant: 18),
-            emptyRoutesTitleLabel.trailingAnchor.constraint(equalTo: emptyRoutesView.trailingAnchor, constant: -18),
-
-            emptyRoutesSubtitleLabel.topAnchor.constraint(equalTo: emptyRoutesTitleLabel.bottomAnchor, constant: 6),
-            emptyRoutesSubtitleLabel.leadingAnchor.constraint(equalTo: emptyRoutesView.leadingAnchor, constant: 20),
-            emptyRoutesSubtitleLabel.trailingAnchor.constraint(equalTo: emptyRoutesView.trailingAnchor, constant: -20),
-            emptyRoutesSubtitleLabel.bottomAnchor.constraint(equalTo: emptyRoutesView.bottomAnchor, constant: -18)
+            emptyRoutesView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -34)
         ])
     }
 
@@ -299,64 +253,11 @@ private extension MapViewController {
         mapDimControl.alpha = 0
         mapDimControl.isHidden = true
         mapDimControl.addTarget(self, action: #selector(onMapDimTapped), for: .touchUpInside)
-        view.addSubview(mapDimControl)
+        mapDimControl
+            .addTo(view)
+            .pinEdges(to: view)
 
-        NSLayoutConstraint.activate([
-            mapDimControl.topAnchor.constraint(equalTo: view.topAnchor),
-            mapDimControl.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            mapDimControl.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            mapDimControl.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-
-        friendCardView.translatesAutoresizingMaskIntoConstraints = false
-        friendCardView.backgroundColor = UIColor.white.withAlphaComponent(0.97)
-        friendCardView.layer.cornerRadius = 24
-        friendCardView.layer.shadowColor = UIColor.black.cgColor
-        friendCardView.layer.shadowOpacity = 0.14
-        friendCardView.layer.shadowRadius = 18
-        friendCardView.layer.shadowOffset = CGSize(width: 0, height: 8)
-        friendCardView.alpha = 0
-        friendCardView.isHidden = true
-
-        friendCardAvatarImageView.translatesAutoresizingMaskIntoConstraints = false
-        friendCardAvatarImageView.contentMode = .scaleAspectFill
-        friendCardAvatarImageView.layer.cornerRadius = 28
-        friendCardAvatarImageView.clipsToBounds = true
-        friendCardAvatarImageView.backgroundColor = Constants.lightPurple ?? UIColor.systemGray5
-
-        friendCardNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        friendCardNameLabel.font = UIFont(name: Constants.manropeExtraBold, size: 18)
-            ?? UIFont.systemFont(ofSize: 18, weight: .black)
-        friendCardNameLabel.textColor = .black
-        friendCardNameLabel.lineBreakMode = .byTruncatingTail
-
-        friendCardStatusLabel.translatesAutoresizingMaskIntoConstraints = false
-        friendCardStatusLabel.font = UIFont(name: Constants.manropeBold, size: 13)
-            ?? UIFont.systemFont(ofSize: 13, weight: .bold)
-        friendCardStatusLabel.textColor = Constants.purple ?? .systemBlue
-
-        friendCardDetailLabel.translatesAutoresizingMaskIntoConstraints = false
-        friendCardDetailLabel.font = UIFont(name: Constants.manropeMedium, size: 12)
-            ?? UIFont.systemFont(ofSize: 12, weight: .medium)
-        friendCardDetailLabel.textColor = UIColor.black.withAlphaComponent(0.48)
-        friendCardDetailLabel.numberOfLines = 2
-
-        friendCardFollowBadge.translatesAutoresizingMaskIntoConstraints = false
-        friendCardFollowBadge.font = UIFont(name: Constants.manropeBold, size: 11)
-            ?? UIFont.systemFont(ofSize: 11, weight: .bold)
-        friendCardFollowBadge.text = "follow"
-        friendCardFollowBadge.textAlignment = .center
-        friendCardFollowBadge.textColor = .white
-        friendCardFollowBadge.backgroundColor = Constants.orange ?? .systemOrange
-        friendCardFollowBadge.layer.cornerRadius = 12
-        friendCardFollowBadge.clipsToBounds = true
-
-        view.addSubview(friendCardView)
-        friendCardView.addSubview(friendCardAvatarImageView)
-        friendCardView.addSubview(friendCardNameLabel)
-        friendCardView.addSubview(friendCardStatusLabel)
-        friendCardView.addSubview(friendCardDetailLabel)
-        friendCardView.addSubview(friendCardFollowBadge)
+        friendCardView.addTo(view)
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(onFriendCardTapped))
         friendCardView.addGestureRecognizer(tap)
@@ -365,34 +266,12 @@ private extension MapViewController {
             friendCardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 18),
             friendCardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
             friendCardView.bottomAnchor.constraint(equalTo: stepsCardView.topAnchor, constant: -12),
-            friendCardView.heightAnchor.constraint(equalToConstant: 92),
-
-            friendCardAvatarImageView.leadingAnchor.constraint(equalTo: friendCardView.leadingAnchor, constant: 16),
-            friendCardAvatarImageView.centerYAnchor.constraint(equalTo: friendCardView.centerYAnchor),
-            friendCardAvatarImageView.widthAnchor.constraint(equalToConstant: 56),
-            friendCardAvatarImageView.heightAnchor.constraint(equalToConstant: 56),
-
-            friendCardFollowBadge.trailingAnchor.constraint(equalTo: friendCardView.trailingAnchor, constant: -14),
-            friendCardFollowBadge.topAnchor.constraint(equalTo: friendCardView.topAnchor, constant: 15),
-            friendCardFollowBadge.widthAnchor.constraint(equalToConstant: 58),
-            friendCardFollowBadge.heightAnchor.constraint(equalToConstant: 24),
-
-            friendCardNameLabel.leadingAnchor.constraint(equalTo: friendCardAvatarImageView.trailingAnchor, constant: 13),
-            friendCardNameLabel.trailingAnchor.constraint(equalTo: friendCardFollowBadge.leadingAnchor, constant: -10),
-            friendCardNameLabel.topAnchor.constraint(equalTo: friendCardView.topAnchor, constant: 16),
-
-            friendCardStatusLabel.leadingAnchor.constraint(equalTo: friendCardNameLabel.leadingAnchor),
-            friendCardStatusLabel.trailingAnchor.constraint(equalTo: friendCardNameLabel.trailingAnchor),
-            friendCardStatusLabel.topAnchor.constraint(equalTo: friendCardNameLabel.bottomAnchor, constant: 3),
-
-            friendCardDetailLabel.leadingAnchor.constraint(equalTo: friendCardNameLabel.leadingAnchor),
-            friendCardDetailLabel.trailingAnchor.constraint(equalTo: friendCardView.trailingAnchor, constant: -16),
-            friendCardDetailLabel.topAnchor.constraint(equalTo: friendCardStatusLabel.bottomAnchor, constant: 4)
+            friendCardView.heightAnchor.constraint(equalToConstant: 92)
         ])
     }
 
     func setupScopeChips() {
-        view.addSubview(scopeChipsView)
+        scopeChipsView.addTo(view)
 
         scopeChipsBottomConstraint = scopeChipsView.bottomAnchor.constraint(
             equalTo: view.safeAreaLayoutGuide.bottomAnchor,
@@ -456,37 +335,11 @@ private extension MapViewController {
     }
 
     func setupSignalBadge() {
-        signalBadgeContainer.translatesAutoresizingMaskIntoConstraints = false
-        signalBadgeContainer.layer.cornerRadius = 14
-        signalBadgeContainer.clipsToBounds = true
-        signalBadgeContainer.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-
-        signalBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
-        signalBadgeLabel.font = .systemFont(ofSize: 13, weight: .bold)
-        signalBadgeLabel.textColor = .white
-        signalBadgeLabel.textAlignment = .left
-
-        signalBadgeDetailLabel.translatesAutoresizingMaskIntoConstraints = false
-        signalBadgeDetailLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        signalBadgeDetailLabel.textColor = UIColor.white.withAlphaComponent(0.76)
-        signalBadgeDetailLabel.textAlignment = .left
-
-        view.addSubview(signalBadgeContainer)
-        signalBadgeContainer.addSubview(signalBadgeLabel)
-        signalBadgeContainer.addSubview(signalBadgeDetailLabel)
+        signalBadgeView.addTo(view)
 
         NSLayoutConstraint.activate([
-            signalBadgeContainer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            signalBadgeContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
-
-            signalBadgeLabel.topAnchor.constraint(equalTo: signalBadgeContainer.topAnchor, constant: 8),
-            signalBadgeLabel.leadingAnchor.constraint(equalTo: signalBadgeContainer.leadingAnchor, constant: 12),
-            signalBadgeLabel.trailingAnchor.constraint(equalTo: signalBadgeContainer.trailingAnchor, constant: -12),
-
-            signalBadgeDetailLabel.topAnchor.constraint(equalTo: signalBadgeLabel.bottomAnchor, constant: 2),
-            signalBadgeDetailLabel.leadingAnchor.constraint(equalTo: signalBadgeContainer.leadingAnchor, constant: 12),
-            signalBadgeDetailLabel.trailingAnchor.constraint(equalTo: signalBadgeContainer.trailingAnchor, constant: -12),
-            signalBadgeDetailLabel.bottomAnchor.constraint(equalTo: signalBadgeContainer.bottomAnchor, constant: -8)
+            signalBadgeView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            signalBadgeView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14)
         ])
 
         applySignalBadge(.poor)
@@ -553,34 +406,15 @@ private extension MapViewController {
         let accuracy = location?.horizontalAccuracy
 
         currentSignalQuality = effectiveQuality
-        signalBadgeLabel.text = signalTitle(quality: effectiveQuality, isLost: isLost)
-        signalBadgeDetailLabel.text = signalDetail(
-            accuracy: accuracy,
-            confidenceScore: trackingManager.currentConfidenceScore,
-            isLost: isLost
+        signalBadgeView.apply(
+            quality: effectiveQuality,
+            title: signalTitle(quality: effectiveQuality, isLost: isLost),
+            detail: signalDetail(
+                accuracy: accuracy,
+                confidenceScore: trackingManager.currentConfidenceScore,
+                isLost: isLost
+            )
         )
-
-        signalBadgeLabel.font = UIFont(name: Constants.manropeBold, size: 13)
-            ?? .systemFont(ofSize: 13, weight: .semibold)
-        signalBadgeDetailLabel.font = UIFont(name: Constants.manropeMedium, size: 11)
-            ?? .systemFont(ofSize: 11, weight: .semibold)
-
-        switch effectiveQuality {
-        case .good:
-            signalBadgeContainer.backgroundColor = UIColor.white.withAlphaComponent(0.94)
-            signalBadgeLabel.textColor = Constants.purple ?? .systemBlue
-            signalBadgeDetailLabel.textColor = UIColor.black.withAlphaComponent(0.48)
-
-        case .weak:
-            signalBadgeContainer.backgroundColor = UIColor.white.withAlphaComponent(0.94)
-            signalBadgeLabel.textColor = Constants.orange ?? .systemOrange
-            signalBadgeDetailLabel.textColor = UIColor.black.withAlphaComponent(0.50)
-
-        case .poor:
-            signalBadgeContainer.backgroundColor = UIColor.black.withAlphaComponent(0.72)
-            signalBadgeLabel.textColor = .white
-            signalBadgeDetailLabel.textColor = UIColor.white.withAlphaComponent(0.72)
-        }
 
         applyAccuracyCircleStyle(quality: effectiveQuality, isLost: isLost)
         applyCurrentUserMarkerStyle(quality: effectiveQuality, isLost: isLost)
@@ -1382,7 +1216,7 @@ private extension MapViewController {
 
                 if selectedFriend?.userId == friend.userId {
                     selectedFriend = friend
-                    configureFriendCard(friend)
+                    friendCardView.configure(with: friend)
                 }
 
                 let previousUrl = currentFriendAvatarUrls[friend.userId]
@@ -1508,7 +1342,7 @@ private extension MapViewController {
 
     func friendMarkerOpacity(_ friend: FriendLiveLocation) -> Float {
         let quality = trackQuality(from: friend.signalQuality)
-        let isStale = (parseServerDate(friend.updatedAt) ?? .distantPast).timeIntervalSinceNow < -5 * 60
+        let isStale = (friend.mapUpdatedAtDate ?? .distantPast).timeIntervalSinceNow < -5 * 60
         return (quality == .poor || isStale) ? 0.68 : 1
     }
 }
@@ -1636,20 +1470,7 @@ private extension MapViewController {
     }
 
     func mapMovementKind(from rawValue: String?) -> MapMovementKind {
-        guard let rawValue else { return .unknown }
-
-        switch rawValue {
-        case "walking", "running":
-            return .walking
-        case "automotive", "cycling", "transport":
-            return .transport
-        case "stationary":
-            return .stationary
-        case "signal_lost":
-            return .signalLost
-        default:
-            return MapMovementKind(rawValue: rawValue) ?? .unknown
-        }
+        MapMovementKind.fromLiveValue(rawValue)
     }
 
     func trackBreakReason(from rawValue: String?) -> TrackBreakReason? {
@@ -1682,7 +1503,7 @@ private extension MapViewController {
         followedFriendId = friend.userId
         isFollowModeEnabled = true
         applyFollowModeState()
-        configureFriendCard(friend)
+        friendCardView.configure(with: friend)
 
         let point = YMKPoint(latitude: friend.latitude, longitude: friend.longitude)
         moveCamera(to: point, duration: 0.65, force: true)
@@ -1719,101 +1540,6 @@ private extension MapViewController {
             self.friendCardView.isHidden = true
             self.friendCardView.transform = .identity
         }
-    }
-
-    func configureFriendCard(_ friend: FriendLiveLocation) {
-        friendCardNameLabel.text = friend.username
-        friendCardStatusLabel.text = friendMovementText(friend)
-        friendCardStatusLabel.textColor = friendStatusColor(friend)
-        friendCardDetailLabel.text = friendDetailText(friend)
-        friendCardAvatarImageView.image = FriendMarkerFactory.makeCardAvatarFallbackImage(username: friend.username)
-
-        if let avatarUrl = friend.avatarUrl, !avatarUrl.isEmpty {
-            AvatarLoader.shared.load(urlString: avatarUrl) { [weak self] image in
-                guard let self else { return }
-                guard self.selectedFriend?.userId == friend.userId else { return }
-                guard let image else { return }
-
-                DispatchQueue.main.async {
-                    self.friendCardAvatarImageView.image = image
-                }
-            }
-        }
-    }
-
-    func friendMovementText(_ friend: FriendLiveLocation) -> String {
-        let kind = mapMovementKind(from: friend.movementKind ?? friend.movementState)
-        if kind != .unknown {
-            return kind.labelText
-        }
-
-        if let signalQuality = friend.signalQuality, signalQuality == "poor" {
-            return "сигнал потерян"
-        }
-
-        return "на карте"
-    }
-
-    func friendStatusColor(_ friend: FriendLiveLocation) -> UIColor {
-        let kind = mapMovementKind(from: friend.movementKind ?? friend.movementState)
-
-        switch kind {
-        case .walking:
-            return Constants.purple ?? .systemBlue
-        case .stationary:
-            return Constants.orange ?? .systemOrange
-        case .transport:
-            return UIColor.systemIndigo
-        case .signalLost:
-            return UIColor.systemGray
-        case .unknown:
-            return Constants.purple ?? .systemBlue
-        }
-    }
-
-    func friendDetailText(_ friend: FriendLiveLocation) -> String {
-        var items: [String] = []
-        items.append(relativeTimeText(from: friend.updatedAt))
-
-        if let horizontalAccuracy = friend.horizontalAccuracy {
-            items.append("точность \(formatAccuracy(horizontalAccuracy))")
-        }
-
-        if let confidenceScore = friend.confidenceScore {
-            items.append("доверие \(confidenceScore)%")
-        }
-
-        return items.joined(separator: " · ")
-    }
-
-    func relativeTimeText(from rawDate: String) -> String {
-        guard let date = parseServerDate(rawDate) else {
-            return "обновлено недавно"
-        }
-
-        let seconds = max(0, Date().timeIntervalSince(date))
-
-        if seconds < 60 {
-            return "только что"
-        }
-
-        if seconds < 3600 {
-            return "был здесь \(Int(seconds / 60)) мин назад"
-        }
-
-        return "был здесь \(Int(seconds / 3600)) ч назад"
-    }
-
-    func parseServerDate(_ rawDate: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        if let date = formatter.date(from: rawDate) {
-            return date
-        }
-
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: rawDate)
     }
 
     @objc func onFriendCardTapped() {
@@ -1894,12 +1620,16 @@ private extension MapViewController {
 
         switch viewModel.selectedScope {
         case .allFriends:
-            emptyRoutesTitleLabel.text = "Пока нет маршрутов"
-            emptyRoutesSubtitleLabel.text = "Когда друзья начнут гулять, их маршруты появятся здесь"
+            emptyRoutesView.configure(
+                title: "Пока нет маршрутов",
+                subtitle: "Когда друзья начнут гулять, их маршруты появятся здесь"
+            )
 
         case .group:
-            emptyRoutesTitleLabel.text = "В группе пока нет маршрутов"
-            emptyRoutesSubtitleLabel.text = "Когда участники группы начнут гулять, их маршруты появятся здесь"
+            emptyRoutesView.configure(
+                title: "В группе пока нет маршрутов",
+                subtitle: "Когда участники группы начнут гулять, их маршруты появятся здесь"
+            )
         }
 
         if shouldShow {

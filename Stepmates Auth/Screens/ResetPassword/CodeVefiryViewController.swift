@@ -78,19 +78,8 @@ final class CodeVerifyViewController: UIViewController {
 private extension CodeVerifyViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
-
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailingLessThanOrEqual(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
-
-        subtitleLabel
-            .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 10)
-            .pinLeading(to: view.safeAreaLayoutGuide.leadingAnchor, constant: Constants.sideInset)
-            .pinTrailing(to: view.safeAreaLayoutGuide.trailingAnchor, constant: -Constants.sideInset)
+        applyStepmatesBaseScreen()
+        layoutAuthHeader(titleLabel: titleLabel, subtitleLabel: subtitleLabel)
 
         codeStack
             .addTo(view)

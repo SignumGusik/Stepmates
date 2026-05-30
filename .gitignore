@@ -3,3 +3,41 @@ Pods/
 xcuserdata/
 .DS_Store
 auth_backend/db.sqlite3
+
+# Local secrets
+.env
+.env.*
+!.env.example
+*.xcconfig
+!*.xcconfig.example
+
+# Python / Django local artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+db.sqlite3
+*.sqlite3
+auth_backend/env/
+auth_backend/.venv/
+auth_backend/venv/
+auth_backend/staticfiles/
+auth_backend/media/
+
+# IDE/project-local files
+.idea/
+auth_backend/.idea/
+DerivedData/
+build/
+
+# Old duplicated iOS copy inside backend
+auth_backend/IOS/
+
+# Certificates and provisioning
+*.mobileprovision
+*.cer
+*.p12
+*.pem
+*.key
+*.p8

@@ -99,10 +99,7 @@ private extension SplashViewController {
         starsView.translatesAutoresizingMaskIntoConstraints = false
         starsView
             .addTo(view)
-            .pinTop(toAnchor: view.topAnchor, constant: 0)
-            .pinLeft(toAnchor: view.leftAnchor, constant: 0)
-            .pinRight(toAnchor: view.rightAnchor, constant: 0)
-            .pinBottom(toAnchor: view.bottomAnchor, constant: 0)
+            .pinEdges(to: view)
 
         view.sendSubviewToBack(starsView)
 

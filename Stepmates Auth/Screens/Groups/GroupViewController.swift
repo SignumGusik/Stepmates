@@ -175,7 +175,7 @@ extension GroupViewController {
 private extension GroupViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
 
         dividerView.translatesAutoresizingMaskIntoConstraints = false
         dividerView.backgroundColor = Constants.blue ?? .systemBlue
@@ -277,24 +277,17 @@ private extension GroupViewController {
 
         dropdownOverlay
             .addTo(view)
-            .pinTop(toAnchor: view.topAnchor)
-            .pinLeft(toAnchor: view.leftAnchor)
-            .pinRight(toAnchor: view.rightAnchor)
-            .pinBottom(toAnchor: view.bottomAnchor)
+            .pinEdges(to: view)
 
         view.bringSubviewToFront(dropdownOverlay)
 
-        dropdownTable.translatesAutoresizingMaskIntoConstraints = false
-        dropdownTable.backgroundColor = .white
-        dropdownTable.layer.cornerRadius = 18
-        dropdownTable.clipsToBounds = true
-        dropdownTable.rowHeight = dropdownRowHeight
-        dropdownTable.isScrollEnabled = false
+        dropdownTable.applyPeriodDropdownStyle(
+            rowHeight: dropdownRowHeight,
+            borderColor: Constants.blue
+        )
         dropdownTable.dataSource = self
         dropdownTable.delegate = self
         dropdownTable.register(UITableViewCell.self, forCellReuseIdentifier: "GroupPeriodCell")
-        dropdownTable.layer.borderWidth = 2
-        dropdownTable.layer.borderColor = (Constants.blue ?? .systemBlue).cgColor
 
         dropdownTable
             .addTo(dropdownOverlay)

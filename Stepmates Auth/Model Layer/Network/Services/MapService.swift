@@ -305,20 +305,7 @@ private extension MapService {
     }
     
     func mapMovementKind(from rawValue: String?) -> MapMovementKind {
-        guard let rawValue else { return .unknown }
-        
-        switch rawValue {
-        case "walking", "running":
-            return .walking
-        case "automotive", "cycling", "transport":
-            return .transport
-        case "stationary":
-            return .stationary
-        case "signal_lost":
-            return .signalLost
-        default:
-            return MapMovementKind(rawValue: rawValue) ?? .unknown
-        }
+        MapMovementKind.fromLiveValue(rawValue)
     }
     
     func trackBreakReason(from rawValue: String?) -> TrackBreakReason? {

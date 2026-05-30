@@ -97,6 +97,23 @@ enum MapMovementKind: String, Codable {
             return "движение уточняется"
         }
     }
+
+    static func fromLiveValue(_ rawValue: String?) -> MapMovementKind {
+        guard let rawValue else { return .unknown }
+
+        switch rawValue {
+        case "walking", "running":
+            return .walking
+        case "automotive", "cycling", "transport":
+            return .transport
+        case "stationary":
+            return .stationary
+        case "signal_lost":
+            return .signalLost
+        default:
+            return MapMovementKind(rawValue: rawValue) ?? .unknown
+        }
+    }
 }
 
 struct LocationConfidence {

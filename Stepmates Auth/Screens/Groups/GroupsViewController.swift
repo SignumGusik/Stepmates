@@ -94,37 +94,21 @@ extension GroupsViewController {
 private extension GroupsViewController {
 
     func setupViews() {
-        view.backgroundColor = .white
+        applyStepmatesBaseScreen()
 
         refreshControl.addTarget(self, action: #selector(onRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
 
-        titleLabel
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 16)
-
-        createGroupButton
-            .addTo(view)
-            .pinTop(toAnchor: view.safeAreaLayoutGuide.topAnchor, constant: Constants.titleTop)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -16)
-            .setSize(width: 32, height: 32)
-
-        tableView
-            .addTo(view)
-            .pinTop(toAnchor: titleLabel.bottomAnchor, constant: 28)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 20)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -20)
-            .pinBottom(toAnchor: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
-
-        emptyLabel.textAlignment = .center
-
-        emptyLabel
-            .addTo(view)
-            .centerXOn(view)
-            .centerYOn(view)
-            .pinLeft(toAnchor: view.safeAreaLayoutGuide.leftAnchor, constant: 20)
-            .pinRight(toAnchor: view.safeAreaLayoutGuide.rightAnchor, constant: -20)
+        let titleBottomAnchor = layoutScreenTitle(titleLabel)
+        layoutHeaderActionButton(createGroupButton)
+        layoutTableView(
+            tableView,
+            below: titleBottomAnchor,
+            topSpacing: 28,
+            horizontalInset: 20,
+            bottom: -12
+        )
+        layoutCenteredEmptyLabel(emptyLabel)
     }
 
     func applyGroups(_ result: [GroupListItem]) {
